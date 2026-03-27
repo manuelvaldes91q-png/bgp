@@ -612,6 +612,116 @@ body {
     font-family: var(--font-mono);
 }
 
+/* BGP Info Panel */
+.bgp-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 20px;
+}
+
+.bgp-asn-input { margin-bottom: 16px; }
+
+.bgp-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.bgp-stat {
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.03);
+}
+
+.bgp-stat-value {
+    font-size: 24px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    color: var(--accent-cyan);
+    line-height: 1;
+}
+
+.bgp-stat-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+}
+
+.bgp-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+    margin: 16px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.bgp-prefix-list, .bgp-peer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.bgp-prefix-item, .bgp-peer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-family: var(--font-mono);
+}
+
+.bgp-prefix-item .prefix { color: var(--accent-green); font-weight: 700; }
+.bgp-prefix-item .prefix-name { color: var(--text-secondary); }
+.bgp-peer-item .peer-asn { color: var(--accent-cyan); font-weight: 700; }
+.bgp-peer-item .peer-name { color: var(--text-secondary); }
+.bgp-peer-item .peer-country { color: var(--text-muted); font-size: 10px; }
+
+.bgp-asn-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.bgp-asn-number {
+    font-size: 32px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    color: var(--accent-blue);
+}
+
+.bgp-asn-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.bgp-asn-country {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+@media (max-width: 768px) {
+    .bgp-overview { grid-template-columns: repeat(2, 1fr); }
+}
+
 .loss-low { color: var(--accent-green); }
 .loss-medium { color: var(--accent-yellow); }
 .loss-high { color: var(--accent-red); }

@@ -705,3 +705,108 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSpeedtestHistory();
     }, 1000);
 });
+
+/* ════════════════ BGP INFO ════════════════ */
+
+async function loadBGPInfo() {
+    const asnInput = document.getElementById('bgp-asn-input');
+    const results = document.getElementById('bgp-results');
+    const asn = asnInput.value.trim().replace(/^AS/i, '');
+
+    if (!asn) {
+        results.innerHTML = '<div class="empty-state">Ingresa un numero ASN</div>';
+        return;
+    }
+
+    results.innerHTML = '<div class="loading-placeholder"><div class="loading-spinner"></div><p>Consultando BGP para AS' + esc(asn) + '...</p></div>';
+
+    try {
+        const data = await fetchJSON('/api/bgp/asn/' + asn);
+
+        let html = '';
+
+        // ASN Header
+        html += `<div class="bgp-asn-header">
+            <span class="bgp-asn-number">AS${data.asn}</span>
+            <div>
+                <div class="bgp-asn-name">${esc(data.name || '--')}</div>
+                <div class="bgp-asn-country">${esc(data.country || '--')} | ${esc(data.description || '')}</div>
+            </div>
+        </div>`;
+
+        // Stats overview
+        html += `<div class="bgp-overview">
+            <div class="bgp-stat">
+                <div class="bgp-stat-value">${data.prefixes_v4}</div>
+                <div class="bgp-stat-label">Prefixes v4</div>
+            </div>
+            <div class="bgp-stat">
+                <div class="bgp-stat-value">${data.peers_count}</div>
+                <div class="bgp-stat-label">BGP Peers</div>
+            </div>
+            <div class="bgp-stat">
+                <div class="bgp-stat-value">${data.upstreams_count}</div>
+                <div class="bgp-stat-label">Upstreams</div>
+            </div>
+            <div class="bgp-stat">
+                <div class="bgp-stat-value">${data.downstreams_count}</div>
+                <div class="bgp-stat-label">Downstreams</div>
+            </div>
+        </div>`;
+
+        // Prefixes
+        if (data.prefixes && data.prefixes.length) {
+            html += `<div class="bgp-section-title">Prefixes Originated (${data.prefixes.length})</div>`;
+            html += '<div class="bgp-prefix-list">';
+            data.prefixes.forEach(p => {
+                html += `<div class="bgp-prefix-item">
+                    <span class="prefix">${esc(p.prefix)}</span>
+                    <span class="prefix-name">${esc(p.name || p.description || '')}</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        // Upstreams
+        if (data.upstreams && data.upstreams.length) {
+            html += `<div class="bgp-section-title">Upstream Providers (${data.upstreams.length})</div>`;
+            html += '<div class="bgp-peer-list">';
+            data.upstreams.forEach(p => {
+                html += `<div class="bgp-peer-item">
+                    <span class="peer-asn">AS${p.asn}</span>
+                    <span class="peer-name">${esc(p.name || '--')}</span>
+                    <span class="peer-country">${esc(p.country || '')}</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        // Peers
+        if (data.peers && data.peers.length) {
+            html += `<div class="bgp-section-title">BGP Peers (${data.peers.length})</div>`;
+            html += '<div class="bgp-peer-list">';
+            data.peers.forEach(p => {
+                html += `<div class="bgp-peer-item">
+                    <span class="peer-asn">AS${p.asn}</span>
+                    <span class="peer-name">${esc(p.name || '--')}</span>
+                    <span class="peer-country">${p.ipv4_prefixes || 0} prefixes</span>
+                </div>`;
+            });
+            html += '</div>';
+        }
+
+        results.innerHTML = html;
+    } catch (e) {
+        results.innerHTML = `<div class="empty-state">Error: ${esc(e.message)}</div>`;
+    }
+}
+
+// Allow Enter key in ASN input
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('bgp-asn-input');
+    if (input) {
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadBGPInfo();
+        });
+    }
+});

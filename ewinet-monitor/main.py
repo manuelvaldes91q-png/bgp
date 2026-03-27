@@ -14,6 +14,7 @@ from modules.route_monitor import RouteMonitor, detect_public_ip, lookup_bgp_rou
 from modules.route_analyzer import RouteAnalyzer
 from modules.performance import PerformanceCollector
 from modules.web_server import run_web_server, update_state
+from modules.bgp_info import BGPInfo
 
 PROJECT_ROOT = Path(__file__).parent
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -265,22 +266,40 @@ class EwinetMonitor:
                         as_path_parts.append(label)
                 print(f"  AS Path: {' -> '.join(as_path_parts)}")
 
-                # Show BGP info for each ASN in path
-                print(f"  BGP Routing:")
+                # Show detailed BGP info for each ASN in path
+                print(f"  BGP Detail:")
                 for asn in unique_asns:
-                    prefixes = lookup_bgp_routes(asn.number)
-                    name_str = f" ({asn.name})" if asn.name else ""
                     intl = is_international_hop(asn.number)
                     color = C_GREEN if intl else ""
                     reset = C_RESET if intl else ""
-                    if prefixes:
-                        print(f"    {color}AS{asn.number}{name_str}: {len(prefixes)} prefixes{reset}")
-                        for p in prefixes[:3]:
-                            print(f"      {color}- {p}{reset}")
-                        if len(prefixes) > 3:
-                            print(f"      {color}... ({len(prefixes) - 3} mas){reset}")
+
+                    # Get info from bgpview.io
+                    bgp_info = BGPInfo.get_asn_info(asn.number)
+                    name_str = f" ({asn.name})" if asn.name else ""
+
+                    if bgp_info:
+                        print(f"    {color}AS{asn.number}{name_str}{reset}")
+                        if bgp_info.country:
+                            print(f"      Pais: {bgp_info.country}")
+                        if bgp_info.prefixes_v4 > 0:
+                            print(f"      Prefixes: {bgp_info.prefixes_v4} v4, {bgp_info.prefixes_v6} v6")
+                        if bgp_info.peers_count > 0:
+                            print(f"      Peers: {bgp_info.peers_count} | Upstreams: {bgp_info.upstreams_count} | Downstreams: {bgp_info.downstreams_count}")
+                        if bgp_info.prefixes:
+                            for p in bgp_info.prefixes[:3]:
+                                print(f"      {color}- {p.prefix} ({p.name}){reset}")
+                        if bgp_info.upstreams:
+                            up_names = [f"AS{u.asn}" for u in bgp_info.upstreams[:3]]
+                            print(f"      Upstreams: {', '.join(up_names)}")
                     else:
-                        print(f"    AS{asn.number}{name_str}: sin datos BGP")
+                        # Fallback to whois
+                        prefixes = lookup_bgp_routes(asn.number)
+                        if prefixes:
+                            print(f"    {color}AS{asn.number}{name_str}: {len(prefixes)} prefixes{reset}")
+                            for p in prefixes[:3]:
+                                print(f"      {color}- {p}{reset}")
+                        else:
+                            print(f"    AS{asn.number}{name_str}")
 
                 # Compare with baseline
                 baseline = self.analyzer.get_baseline(snapshot.destination)

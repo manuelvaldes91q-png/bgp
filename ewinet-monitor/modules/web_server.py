@@ -13,6 +13,7 @@ from typing import Any
 
 from config.settings import Settings
 from modules.speedtest import SpeedtestRunner
+from modules.bgp_info import BGPInfo
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +263,44 @@ def create_app(settings: Settings) -> Any:
     def api_speedtest_history() -> Any:
         history = _speedtest.history
         return jsonify([_speedtest.to_dict(r) for r in history])
+
+    # ── BGP Info Endpoints ──
+
+    @app.route("/api/bgp/asn/<int:asn>")
+    def api_bgp_asn(asn: int) -> Any:
+        info = BGPInfo.get_asn_info(asn)
+        if not info:
+            return jsonify({"error": f"ASN {asn} no encontrado"}), 404
+        return jsonify({
+            "asn": info.asn,
+            "name": info.name,
+            "description": info.description,
+            "country": info.country,
+            "prefixes_v4": info.prefixes_v4,
+            "prefixes_v6": info.prefixes_v6,
+            "peers_count": info.peers_count,
+            "upstreams_count": info.upstreams_count,
+            "downstreams_count": info.downstreams_count,
+            "prefixes": [
+                {"prefix": p.prefix, "name": p.name, "country": p.country, "description": p.description}
+                for p in info.prefixes[:20]
+            ],
+            "peers": [
+                {"asn": p.asn, "name": p.name, "country": p.country, "ipv4_prefixes": p.ipv4_prefixes}
+                for p in info.peers[:20]
+            ],
+            "upstreams": [
+                {"asn": p.asn, "name": p.name, "country": p.country}
+                for p in info.upstreams[:10]
+            ],
+        })
+
+    @app.route("/api/bgp/ip/<ip>")
+    def api_bgp_ip(ip: str) -> Any:
+        result = BGPInfo.lookup_ip(ip)
+        if not result:
+            return jsonify({"error": f"No se encontro info para {ip}"}), 404
+        return jsonify(result)
 
     return app
 
