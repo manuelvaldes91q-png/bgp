@@ -226,6 +226,22 @@ function renderProviders(snapshots, anomalies, providers) {
                     </tr>`;
                 });
                 html += '</tbody></table></div>';
+
+                // Show final destination server
+                if (ps.hops && ps.hops.length) {
+                    const lastHop = ps.hops[ps.hops.length - 1];
+                    if (lastHop && lastHop.asn) {
+                        const isLastIntl = isInternationalASN(lastHop.asn.number);
+                        const intlBadge = isLastIntl ? '<span class="dest-intl-badge">INTERNATIONAL</span>' : '';
+                        html += `<div class="final-destination">
+                            <span class="final-dest-label">DESTINO FINAL</span>
+                            <span class="final-dest-ip">${esc(lastHop.ip_address)}</span>
+                            <span class="final-dest-asn">AS${lastHop.asn.number} ${esc(lastHop.asn.name || '')}</span>
+                            <span class="final-dest-rtt">${lastHop.rtt_avg > 0 ? lastHop.rtt_avg.toFixed(1) + 'ms' : ''}</span>
+                            ${intlBadge}
+                        </div>`;
+                    }
+                }
             }
 
             html += '</div>'; // .as-path-container

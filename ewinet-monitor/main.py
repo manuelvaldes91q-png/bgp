@@ -301,7 +301,7 @@ class EwinetMonitor:
 
             # Show key hops
             print(f"  Hops:")
-            for hop in snapshot.hops[:10]:
+            for hop in snapshot.hops:
                 asn_num = hop.asn.number if hop.asn else 0
                 asn_str = f"AS{asn_num}" if hop.asn else "?"
                 name_str = f" ({hop.asn.name})" if hop.asn and hop.asn.name else ""
@@ -315,16 +315,28 @@ class EwinetMonitor:
                 else:
                     color, reset = "", ""
 
+                # Mark last hop
+                is_last = hop == snapshot.hops[-1]
+                marker = f" {C_BOLD}<< DESTINO{C_RESET}" if is_last else ""
+
                 print(
                     f"    {color}#{hop.hop_number:2d} "
                     f"{hop.ip_address:18s} "
                     f"{asn_str}{name_str}"
                     f"  {hop.rtt_avg:7.1f}ms"
-                    f"{loss_str}{reset}"
+                    f"{loss_str}{reset}{marker}"
                 )
 
-            if len(snapshot.hops) > 10:
-                print(f"    ... ({len(snapshot.hops) - 10} hops mas)")
+            # Show final destination summary
+            if snapshot.hops:
+                last_hop = snapshot.hops[-1]
+                if last_hop.asn:
+                    intl_tag = f" {C_GREEN}[INTERNATIONAL]{C_RESET}" if is_international_hop(last_hop.asn.number) else ""
+                    print(f"\n  Servidor final: {C_BOLD}{last_hop.ip_address}{C_RESET} "
+                          f"(AS{last_hop.asn.number} - {last_hop.asn.name or 'unknown'}){intl_tag}")
+                    print(f"  Latencia final: {last_hop.rtt_avg:.1f}ms")
+                    if last_hop.loss_percent > 0:
+                        print(f"  {C_YELLOW}Perdida: {last_hop.loss_percent:.0f}%{C_RESET}")
 
         # Performance summary
         print(f"\n{'=' * 70}")

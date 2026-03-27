@@ -563,6 +563,55 @@ body {
 .hops-table tr.hop-intl td { color: var(--accent-green); }
 .hops-table tr.hop-intl td:first-child { border-left: 2px solid var(--accent-green); }
 
+/* Final Destination */
+.final-destination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+}
+
+.final-dest-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-green);
+    letter-spacing: 0.8px;
+    font-family: var(--font-mono);
+}
+
+.final-dest-ip {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.final-dest-asn {
+    font-family: var(--font-mono);
+    color: var(--accent-cyan);
+}
+
+.final-dest-rtt {
+    font-family: var(--font-mono);
+    color: var(--accent-green);
+    font-weight: 700;
+}
+
+.dest-intl-badge {
+    font-size: 8px;
+    font-weight: 800;
+    color: var(--accent-green);
+    background: rgba(16,185,129,0.15);
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    font-family: var(--font-mono);
+}
+
 .loss-low { color: var(--accent-green); }
 .loss-medium { color: var(--accent-yellow); }
 .loss-high { color: var(--accent-red); }
