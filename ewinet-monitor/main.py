@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from config.settings import Settings
-from modules.route_monitor import RouteMonitor, detect_public_ip
+from modules.route_monitor import RouteMonitor, detect_public_ip, lookup_bgp_routes
 from modules.route_analyzer import RouteAnalyzer
 from modules.performance import PerformanceCollector
 from modules.web_server import run_web_server, update_state
@@ -249,6 +249,20 @@ class EwinetMonitor:
                     for asn in unique_asns
                 )
                 print(f"  AS Path: {as_path_str}")
+
+                # Show BGP info for each ASN in path
+                print(f"  BGP Routing:")
+                for asn in unique_asns:
+                    prefixes = lookup_bgp_routes(asn.number)
+                    name_str = f" ({asn.name})" if asn.name else ""
+                    if prefixes:
+                        print(f"    AS{asn.number}{name_str}: {len(prefixes)} prefixes")
+                        for p in prefixes[:5]:
+                            print(f"      - {p}")
+                        if len(prefixes) > 5:
+                            print(f"      ... ({len(prefixes) - 5} mas)")
+                    else:
+                        print(f"    AS{asn.number}{name_str}: sin datos BGP")
 
                 # Compare with baseline
                 baseline = self.analyzer.get_baseline(snapshot.destination)

@@ -32,12 +32,50 @@ def detect_public_ip() -> str:
             req = urllib.request.Request(service, headers={"User-Agent": "ewinet-monitor/1.0"})
             with urllib.request.urlopen(req, timeout=10) as response:
                 ip = response.read().decode("utf-8").strip()
-                # Validate it's an IP
                 socket.inet_aton(ip)
                 return ip
         except Exception:
             continue
     return ""
+
+
+def lookup_asn_hackertarget(ip: str) -> dict[str, str] | None:
+    """Lookup ASN info via hackertarget.com API."""
+    if ip == "*" or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172.16."):
+        return None
+    try:
+        url = f"https://api.hackertarget.com/aslookup/?q={ip}&output=json"
+        req = urllib.request.Request(url, headers={"User-Agent": "ewinet-monitor/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            if "asn" in data:
+                return {
+                    "asn": data.get("asn", ""),
+                    "name": data.get("asn_name", ""),
+                    "prefix": data.get("asn_range", ""),
+                }
+    except Exception:
+        pass
+    return None
+
+
+def lookup_bgp_routes(asn: int) -> list[str]:
+    """Lookup BGP prefixes for an ASN via whois.radb.net."""
+    prefixes: list[str] = []
+    try:
+        result = subprocess.run(
+            ["whois", "-h", "whois.radb.net", f"-i origin AS{asn}"],
+            capture_output=True, text=True, timeout=15,
+        )
+        for line in result.stdout.split("\n"):
+            line = line.strip()
+            if line.startswith("route:") or line.startswith("route6:"):
+                prefix = line.split(":", 1)[1].strip()
+                if prefix:
+                    prefixes.append(prefix)
+    except Exception:
+        pass
+    return prefixes[:10]
 
 
 def resolve_hostname(ip: str) -> str:
@@ -67,6 +105,7 @@ class RouteMonitor:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._asn_name_cache: dict[int, str] = {}
 
     def run_mtr_json(self, destination: str, source_ip: str = "",
                      cycles: int = 10, max_hops: int = 30) -> dict[str, Any] | None:
@@ -162,11 +201,69 @@ class RouteMonitor:
             rtt_max=rtt_max,
         )
 
+    def _resolve_asn_name(self, asn_number: int) -> str:
+        """Resolve ASN name from cache, config, hackertarget, or whois."""
+        if asn_number in self._asn_name_cache:
+            return self._asn_name_cache[asn_number]
+
+        # Try config registry first
+        name = self.settings.asn_registry.get(asn_number, "")
+        if name:
+            self._asn_name_cache[asn_number] = name
+            return name
+
+        # Try hackertarget API
+        try:
+            url = f"https://api.hackertarget.com/aslookup/?q=AS{asn_number}&output=json"
+            req = urllib.request.Request(url, headers={"User-Agent": "ewinet-monitor/1.0"})
+            with urllib.request.urlopen(req, timeout=8) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if "asn_name" in data:
+                    name = data["asn_name"]
+                    self._asn_name_cache[asn_number] = name
+                    return name
+        except Exception:
+            pass
+
+        # Fallback to whois
+        try:
+            result = subprocess.run(
+                ["whois", f"AS{asn_number}"],
+                capture_output=True, text=True, timeout=10,
+            )
+            for line in result.stdout.split("\n"):
+                if line.lower().startswith("as-name:") or line.lower().startswith("aut-num:"):
+                    name = line.split(":", 1)[1].strip()
+                    if name:
+                        self._asn_name_cache[asn_number] = name
+                        return name
+                if "netname:" in line.lower():
+                    name = line.split(":", 1)[1].strip()
+                    if name:
+                        self._asn_name_cache[asn_number] = name
+                        return name
+        except Exception:
+            pass
+
+        self._asn_name_cache[asn_number] = ""
+        return ""
+
     def _lookup_asn(self, ip: str) -> ASN | None:
-        """Lookup ASN for an IP using whois."""
+        """Lookup ASN for an IP using whois + hackertarget."""
         if ip == "*" or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172.16."):
             return None
 
+        # Try hackertarget first (faster, more reliable names)
+        ht_result = lookup_asn_hackertarget(ip)
+        if ht_result:
+            try:
+                asn_num = int(ht_result["asn"])
+                asn_name = ht_result["name"]
+                return ASN(number=asn_num, name=asn_name)
+            except (ValueError, KeyError):
+                pass
+
+        # Fallback to whois.cymru.com
         try:
             result = subprocess.run(
                 ["whois", "-h", "whois.cymru.com", f" -v {ip}"],
@@ -228,6 +325,11 @@ class RouteMonitor:
                         ip_to_hop[ip].asn = asn
                 except Exception:
                     logger.debug("ASN lookup failed for %s", ip)
+
+        # Resolve missing ASN names
+        for hop in hops:
+            if hop.asn and not hop.asn.name:
+                hop.asn.name = self._resolve_asn_name(hop.asn.number)
 
         return hops
 
