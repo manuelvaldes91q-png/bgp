@@ -132,6 +132,29 @@ def create_app(settings: Settings) -> Any:
                 result.append(a)
         return jsonify(result)
 
+    @app.route("/api/providers")
+    def api_providers() -> Any:
+        """Return destinations as provider-like objects for dashboard compatibility."""
+        providers = []
+        for d in settings.destinations:
+            providers.append({
+                "name": d.description or d.destination,
+                "asn": d.expected_asn or 0,
+                "gateway": "",
+                "interface": "",
+                "vlan_id": "",
+                "destinations": [d.destination],
+                "description": d.description,
+                "baseline": {
+                    "expected_as_path": d.baseline.expected_as_path.as_numbers() if d.baseline else [],
+                    "expected_as_path_str": str(d.baseline.expected_as_path) if d.baseline else "--",
+                    "known_transit_asns": d.baseline.known_transit_asns if d.baseline else [],
+                    "expected_first_hop_asn": d.baseline.expected_first_hop_asn if d.baseline else 0,
+                    "baseline_rtt_avg": d.baseline.baseline_rtt_avg if d.baseline else 0.0,
+                } if d.baseline else {},
+            })
+        return jsonify(providers)
+
     @app.route("/api/destinations")
     def api_destinations() -> Any:
         dests = []

@@ -98,11 +98,12 @@ function renderProviders(snapshots, anomalies, providers) {
         return;
     }
 
-    // Group snapshots by provider
+    // Group snapshots by provider (use destination as fallback if no provider name)
     const byProvider = {};
     snapshots.forEach(s => {
-        if (!byProvider[s.provider_name]) byProvider[s.provider_name] = [];
-        byProvider[s.provider_name].push(s);
+        const key = s.provider_name || s.as_path_numbers?.[0] ? 'AS' + (s.as_path_numbers?.[0] || '') : s.destination;
+        if (!byProvider[key]) byProvider[key] = [];
+        byProvider[key].push(s);
     });
 
     // Get provider config for expected ASNs
@@ -112,8 +113,9 @@ function renderProviders(snapshots, anomalies, providers) {
     // Get anomaly ASNs per provider
     const anomalyASNs = {};
     anomalies.forEach(a => {
-        if (!anomalyASNs[a.provider_name]) anomalyASNs[a.provider_name] = new Set();
-        (a.unexpected_asns || []).forEach(asn => anomalyASNs[a.provider_name].add(asn.number));
+        const key = a.provider_name || 'unknown';
+        if (!anomalyASNs[key]) anomalyASNs[key] = new Set();
+        (a.unexpected_asns || []).forEach(asn => anomalyASNs[key].add(asn.number));
     });
 
     let html = '';
@@ -130,31 +132,34 @@ function renderProviders(snapshots, anomalies, providers) {
         });
 
         // Check for anomalies
-        const providerAnomalies = anomalies.filter(a => a.provider_name === name);
+        const providerAnomalies = anomalies.filter(a => (a.provider_name || 'unknown') === name);
         if (providerAnomalies.length > 0 && worstStatus === 'normal') worstStatus = 'warning';
 
         const statusLabel = worstStatus.charAt(0).toUpperCase() + worstStatus.slice(1);
+        const displayName = name || providerSnaps[0].destination;
 
         html += `<div class="provider-card status-${worstStatus}">`;
 
         // Header
         html += `<div class="provider-header">
             <div class="provider-name">
-                <h3>${esc(name)}</h3>
-                <span class="provider-asn">AS${providerSnaps[0].provider_asn}</span>
+                <h3>${esc(displayName)}</h3>
+                ${providerSnaps[0].provider_asn ? `<span class="provider-asn">AS${providerSnaps[0].provider_asn}</span>` : ''}
             </div>
             <span class="provider-status ${worstStatus}">${statusLabel}</span>
         </div>`;
 
         html += '<div class="provider-body">';
 
-        // Meta info
+        // Meta info - only show if available
         const snap = providerSnaps[0];
-        html += `<div class="provider-meta">
-            <span>🔌 ${esc(snap.physical_interface || cfg.interface || '--')}</span>
-            <span>🏷️ VLAN ${esc(snap.vlan_id || cfg.vlan_id || '--')}</span>
-            <span>📡 ${esc(snap.gateway || '--')}</span>
-        </div>`;
+        const metaItems = [];
+        if (snap.physical_interface || cfg.interface) metaItems.push(`<span>🔌 ${esc(snap.physical_interface || cfg.interface)}</span>`);
+        if (snap.vlan_id || cfg.vlan_id) metaItems.push(`<span>🏷️ VLAN ${esc(snap.vlan_id || cfg.vlan_id)}</span>`);
+        if (snap.gateway) metaItems.push(`<span>📡 ${esc(snap.gateway)}</span>`);
+        if (metaItems.length) {
+            html += `<div class="provider-meta">${metaItems.join('')}</div>`;
+        }
 
         // For each destination, show AS path
         providerSnaps.forEach(ps => {
@@ -328,7 +333,7 @@ function renderBaselines(baselines, providers) {
     const grid = document.getElementById('baselines-grid');
 
     if (!Object.keys(baselines).length && !providers.length) {
-        grid.innerHTML = '<div class="empty-state">Sin baselines configuradas</div>';
+        grid.innerHTML = '<div class="empty-state">Sin baselines configuradas - se aprenderán en el primer ciclo</div>';
         return;
     }
 
@@ -338,35 +343,27 @@ function renderBaselines(baselines, providers) {
     providers.forEach(p => {
         const b = p.baseline || {};
         html += `<div class="baseline-card">
-            <h4>📡 ${esc(p.name)} <span class="provider-asn">AS${p.asn}</span></h4>
+            <h4>📍 ${esc(p.name)} ${p.asn ? `<span class="provider-asn">AS${p.asn}</span>` : ''}</h4>
             <div class="baseline-row">
                 <span class="baseline-label">AS-PATH Esperado</span>
                 <span class="baseline-value">${esc(b.expected_as_path_str || '--')}</span>
             </div>
-            <div class="baseline-row">
+            ${b.expected_first_hop_asn ? `<div class="baseline-row">
                 <span class="baseline-label">Primer Salto ASN</span>
-                <span class="baseline-value">AS${b.expected_first_hop_asn || '--'}</span>
-            </div>
-            <div class="baseline-row">
+                <span class="baseline-value">AS${b.expected_first_hop_asn}</span>
+            </div>` : ''}
+            ${b.known_transit_asns && b.known_transit_asns.length ? `<div class="baseline-row">
                 <span class="baseline-label">Transits Conocidos</span>
-                <span class="baseline-value">${(b.known_transit_asns || []).map(x => 'AS' + x).join(', ') || '--'}</span>
-            </div>
+                <span class="baseline-value">${b.known_transit_asns.map(x => 'AS' + x).join(', ')}</span>
+            </div>` : ''}
             <div class="baseline-row">
                 <span class="baseline-label">RTT Baseline</span>
                 <span class="baseline-value">${b.baseline_rtt_avg > 0 ? b.baseline_rtt_avg.toFixed(1) + 'ms' : 'Auto'}</span>
             </div>
-            <div class="baseline-row">
-                <span class="baseline-label">Gateway</span>
-                <span class="baseline-value">${esc(p.gateway)}</span>
-            </div>
-            <div class="baseline-row">
-                <span class="baseline-label">Interfaz</span>
-                <span class="baseline-value">${esc(p.interface)} (VLAN ${esc(p.vlan_id)})</span>
-            </div>
-            <div class="baseline-row">
-                <span class="baseline-label">Destinos</span>
-                <span class="baseline-value">${(p.destinations || []).join(', ')}</span>
-            </div>
+            ${p.destinations && p.destinations.length ? `<div class="baseline-row">
+                <span class="baseline-label">Destino</span>
+                <span class="baseline-value">${p.destinations.join(', ')}</span>
+            </div>` : ''}
         </div>`;
     });
 
@@ -376,7 +373,7 @@ function renderBaselines(baselines, providers) {
 /* ────────── History ────────── */
 function populateHistoryFilter(providers) {
     const sel = document.getElementById('history-filter');
-    if (sel.options.length > 1) return; // already populated
+    if (sel.options.length > 1) return;
 
     providers.forEach(p => {
         const opt = document.createElement('option');
@@ -392,7 +389,7 @@ async function loadHistory() {
 
     try {
         const data = await fetchJSON(API.history + '?limit=100');
-        const filtered = filter === 'all' ? data : data.filter(r => r.provider === filter);
+        const filtered = filter === 'all' ? data : data.filter(r => r.provider === filter || r.destination === filter);
 
         if (!filtered.length) {
             tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin datos de historial</td></tr>';
