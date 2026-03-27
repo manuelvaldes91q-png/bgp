@@ -3,31 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ewinet Route Monitor - Dashboard</title>
+    <title>Ewinet Route Monitor - NOC Dashboard</title>
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
 </head>
 <body>
     <header class="topbar">
         <div class="topbar-left">
             <div class="logo">
-                <span class="logo-icon">🌐</span>
-                <h1>Ewinet <span class="logo-sub">Route Monitor</span></h1>
+                <div class="logo-icon-wrap">
+                    <svg class="logo-svg" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+                        <circle cx="16" cy="16" r="3" fill="currentColor"/>
+                        <ellipse cx="16" cy="16" rx="14" ry="6" stroke="currentColor" stroke-width="1.2" opacity="0.5"/>
+                        <ellipse cx="16" cy="16" rx="6" ry="14" stroke="currentColor" stroke-width="1.2" opacity="0.5"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>Ewinet <span class="logo-sub">Route Monitor</span></h1>
+                    <span class="logo-version">NOC Dashboard v1.0</span>
+                </div>
             </div>
         </div>
         <div class="topbar-right">
+            <div class="info-chip" id="public-ip-chip">
+                <span class="info-chip-label">PUBLIC IP</span>
+                <span class="info-chip-value" id="public-ip-value">--</span>
+            </div>
+            <div class="info-chip">
+                <span class="info-chip-label">UPTIME</span>
+                <span class="info-chip-value" id="uptime-value">--</span>
+            </div>
             <div class="status-badge" id="system-status">
                 <span class="status-dot" id="status-dot"></span>
-                <span id="status-text">Loading...</span>
+                <span id="status-text">Connecting...</span>
             </div>
             <div class="cycle-info">
-                Cycle: <strong id="cycle-count">0</strong>
+                <span class="cycle-label">CYCLE</span>
+                <strong id="cycle-count">0</strong>
             </div>
-            <div class="last-update" id="last-update">
-                Last update: --
-            </div>
-            <button class="btn-refresh" onclick="refreshAll()" title="Refresh now">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <span class="last-update" id="last-update">--</span>
+            <button class="btn-refresh" onclick="refreshAll()" title="Refresh Now">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M23 4v6h-6M1 20v-6h6"/>
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                 </svg>
@@ -36,118 +55,150 @@
     </header>
 
     <main class="dashboard">
-        <!-- Summary Cards -->
-        <section class="summary-cards" id="summary-cards">
-            <div class="card card-providers">
-                <div class="card-icon">📡</div>
-                <div class="card-body">
-                    <div class="card-value" id="total-providers">--</div>
-                    <div class="card-label">Proveedores</div>
+        <!-- KPI Row -->
+        <section class="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div class="kpi-body">
+                    <div class="kpi-value" id="total-destinations">--</div>
+                    <div class="kpi-label">Destinos Monitoreados</div>
                 </div>
             </div>
-            <div class="card card-routes-ok">
-                <div class="card-icon">✅</div>
-                <div class="card-body">
-                    <div class="card-value" id="routes-ok">--</div>
-                    <div class="card-label">Rutas OK</div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-green">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="kpi-body">
+                    <div class="kpi-value" id="routes-ok">--</div>
+                    <div class="kpi-label">Rutas Estables</div>
                 </div>
             </div>
-            <div class="card card-anomalies">
-                <div class="card-icon">⚠️</div>
-                <div class="card-body">
-                    <div class="card-value" id="anomaly-count">--</div>
-                    <div class="card-label">Anomalías</div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-red">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div class="kpi-body">
+                    <div class="kpi-value" id="anomaly-count">0</div>
+                    <div class="kpi-label">Alertas Activas</div>
                 </div>
             </div>
-            <div class="card card-avg-latency">
-                <div class="card-icon">⏱️</div>
-                <div class="card-body">
-                    <div class="card-value" id="avg-latency">--</div>
-                    <div class="card-label">Latencia Prom.</div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="kpi-body">
+                    <div class="kpi-value" id="avg-latency">--</div>
+                    <div class="kpi-label">RTT Promedio</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon kpi-icon-orange">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <div class="kpi-body">
+                    <div class="kpi-value" id="asns-detected">--</div>
+                    <div class="kpi-label">ASNs en Ruta</div>
                 </div>
             </div>
         </section>
 
-        <!-- Provider Route Cards -->
+        <!-- Route Cards -->
         <section class="section">
-            <h2 class="section-title">
-                <span class="section-icon">🗺️</span>
-                Estado de Rutas por Proveedor
-            </h2>
+            <div class="section-header">
+                <h2 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Estado de Rutas BGP
+                </h2>
+                <div class="section-actions">
+                    <span class="live-indicator"><span class="live-dot"></span> LIVE</span>
+                </div>
+            </div>
             <div class="providers-grid" id="providers-grid">
-                <div class="loading-placeholder">Cargando datos de rutas...</div>
+                <div class="loading-placeholder">
+                    <div class="loading-spinner"></div>
+                    <p>Esperando datos del primer ciclo...</p>
+                </div>
             </div>
         </section>
 
-        <!-- Performance Metrics -->
+        <!-- Performance -->
         <section class="section">
-            <h2 class="section-title">
-                <span class="section-icon">📊</span>
-                Métricas de Rendimiento
-            </h2>
+            <div class="section-header">
+                <h2 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+                    Metricas de Rendimiento
+                </h2>
+            </div>
             <div class="perf-grid" id="perf-grid">
-                <div class="loading-placeholder">Cargando métricas...</div>
+                <div class="loading-placeholder">Cargando metricas...</div>
             </div>
         </section>
 
-        <!-- Active Anomalies -->
+        <!-- Alerts -->
         <section class="section">
-            <h2 class="section-title">
-                <span class="section-icon">🚨</span>
-                Alertas Activas
-                <span class="badge" id="active-alerts-badge">0</span>
-            </h2>
+            <div class="section-header">
+                <h2 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Alertas y Anomalias
+                    <span class="badge" id="active-alerts-badge">0</span>
+                </h2>
+            </div>
             <div class="alerts-list" id="alerts-list">
-                <div class="empty-state">No hay alertas activas</div>
+                <div class="empty-state-ok">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span>Sin alertas activas - Todas las rutas dentro de parametros</span>
+                </div>
             </div>
         </section>
 
-        <!-- Route History Timeline -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="section-icon">📜</span>
-                Historial de Rutas
-            </h2>
-            <div class="history-controls">
-                <select id="history-filter">
-                    <option value="all">Todos los proveedores</option>
-                </select>
-                <button class="btn-secondary" onclick="loadHistory()">Ver Historial</button>
-            </div>
-            <div class="history-table-wrap">
-                <table class="history-table" id="history-table">
-                    <thead>
-                        <tr>
-                            <th>Fecha/Hora</th>
-                            <th>Proveedor</th>
-                            <th>Destino</th>
-                            <th>AS-PATH</th>
-                            <th>Hops</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-tbody">
-                        <tr><td colspan="6" class="empty-state">Sin datos de historial</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        <!-- History + Baselines -->
+        <div class="two-col">
+            <section class="section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Historial
+                    </h2>
+                </div>
+                <div class="history-controls">
+                    <select id="history-filter"><option value="all">Todos los destinos</option></select>
+                    <button class="btn-secondary" onclick="loadHistory()">Cargar</button>
+                </div>
+                <div class="history-table-wrap">
+                    <table class="history-table">
+                        <thead><tr><th>Fecha</th><th>Destino</th><th>AS-PATH</th><th>Hops</th><th>Estado</th></tr></thead>
+                        <tbody id="history-tbody"><tr><td colspan="5" class="empty-state">Sin datos</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
 
-        <!-- Baselines Info -->
-        <section class="section">
-            <h2 class="section-title">
-                <span class="section-icon">📋</span>
-                Líneas Base Configuradas
-            </h2>
-            <div class="baselines-grid" id="baselines-grid">
-                <div class="loading-placeholder">Cargando baselines...</div>
-            </div>
-        </section>
+            <section class="section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Baselines
+                    </h2>
+                </div>
+                <div class="baselines-grid" id="baselines-grid">
+                    <div class="loading-placeholder">Cargando...</div>
+                </div>
+            </section>
+        </div>
     </main>
 
     <footer class="footer">
-        <span>Ewinet Route Monitor v1.0 &mdash; ISP Network Operations</span>
-        <span id="footer-uptime"></span>
+        <div class="footer-left">
+            <span class="footer-brand">Ewinet Route Monitor</span>
+            <span class="footer-sep">|</span>
+            <span>Network Operations Center</span>
+        </div>
+        <div class="footer-right">
+            <span id="footer-uptime"></span>
+            <span class="footer-sep">|</span>
+            <span id="footer-last-cycle"></span>
+        </div>
     </footer>
 
     <script src="/static/js/dashboard.js"></script>

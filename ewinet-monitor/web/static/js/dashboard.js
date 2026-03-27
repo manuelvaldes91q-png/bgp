@@ -57,28 +57,47 @@ function renderStatus(data) {
     const cycle = document.getElementById('cycle-count');
     const lastUp = document.getElementById('last-update');
     const footerUp = document.getElementById('footer-uptime');
+    const footerCycle = document.getElementById('footer-last-cycle');
 
     const s = data.status || 'unknown';
     dot.className = 'status-dot ' + (s === 'running' ? 'running' : s === 'starting' ? 'starting' : 'error');
     text.textContent = s.charAt(0).toUpperCase() + s.slice(1);
     cycle.textContent = data.cycle_count || 0;
-    lastUp.textContent = 'Last: ' + (data.last_update_human || '--');
+    lastUp.textContent = data.last_update_human || '--';
 
+    // Public IP
+    const ipValue = document.getElementById('public-ip-value');
+    if (ipValue && data.public_ip) {
+        ipValue.textContent = data.public_ip;
+    }
+
+    // Uptime
     if (data.uptime) {
-        footerUp.textContent = 'Uptime: ' + formatDuration(data.uptime);
+        const upValue = document.getElementById('uptime-value');
+        if (upValue) upValue.textContent = formatDuration(data.uptime);
+        if (footerUp) footerUp.textContent = 'Uptime: ' + formatDuration(data.uptime);
+    }
+
+    if (footerCycle) {
+        footerCycle.textContent = 'Cycle: ' + (data.cycle_count || 0);
     }
 }
 
-/* ────────── Summary Cards ────────── */
+/* ────────── KPI Cards ────────── */
 function renderSummaryCards(snapshots, anomalies, perf, providers) {
-    document.getElementById('total-providers').textContent = providers.length;
+    document.getElementById('total-destinations').textContent = providers.length;
 
     let routesOk = 0;
+    let totalAsns = new Set();
     snapshots.forEach(s => {
         if (s.status === 'normal') routesOk++;
+        if (s.as_path_numbers) {
+            s.as_path_numbers.forEach(n => totalAsns.add(n));
+        }
     });
     document.getElementById('routes-ok').textContent = routesOk;
     document.getElementById('anomaly-count').textContent = anomalies.length;
+    document.getElementById('asns-detected').textContent = totalAsns.size;
 
     // Avg latency
     let totalRtt = 0, count = 0;
