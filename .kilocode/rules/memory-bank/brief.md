@@ -1,48 +1,39 @@
-# Project Brief: Next.js Starter Template
+# Project Brief: Ewinet Route Monitor - Diagnostico Local
 
 ## Purpose
 
-This is a minimal Next.js starter template designed for AI-assisted development. It provides a clean foundation that can be extended to build any type of web application through interaction with an AI assistant.
+Herramienta de diagnostico para identificar cambios de ruta de los proveedores ISP (Inter, Digitel, Besser). Se ejecuta desde tu PC para que puedas decidir que cambios hacer en las rutas estaticas de tu MikroTik.
 
 ## Target Users
 
-- Developers wanting a clean Next.js starting point
-- Users building applications through AI-assisted coding
-- Teams needing a standardized, modern Next.js setup
+- Administradores de red con MikroTik que necesitan diagnosticar rutas ISP
+- Operadores que necesitan identificar cuando un proveedor cambia su ruta de transito
 
-## Core Use Case
+## How It Works
 
-Users describe what they want to build to an AI assistant, which then expands this template by:
-
-1. Adding components and pages as needed
-2. Installing additional dependencies
-3. Setting up databases, authentication, etc. using recipes
-4. Customizing styling and branding
+1. Ejecutas `python main.py --once` desde tu PC
+2. La herramienta hace MTR + whois a cada destino por cada proveedor
+3. Compara las rutas actuales contra los baselines configurados
+4. Te muestra un reporte detallado con AS Paths, anomalias y performance
+5. Tu decides si necesitas cambiar rutas estaticas en MikroTik
 
 ## Key Requirements
 
 ### Must Have
+- Diagnostico de rutas via MTR + whois ASN lookup
+- Comparacion contra baselines configurados
+- Deteccion de anomalias (ASN inesperado, ruta cambiada)
+- Output claro en consola
+- Dashboard web opcional (Flask)
 
-- Modern Next.js 16 setup with App Router
-- TypeScript for type safety
-- Tailwind CSS 4 for styling
-- ESLint for code quality
-- Clean, minimal starting structure
-- Bun as package manager
+### Not Needed (tu lo manejas)
+- MikroTik API/SSH integration (deshabilitado)
+- Telegram alerts (deshabilitado)
+- Cambio automatico de rutas
 
-### Nice to Have
+## Tech Stack
 
-- Recipe system for common additions (database, auth)
-- Memory bank for AI context persistence
-- Clear development guidelines
-
-## Success Metrics
-
-- Clean, zero-error TypeScript setup
-- Passing lint and type checks
-
-## Constraints
-
-- Minimal dependencies by default
-- Framework: Next.js 16 + React 19 + Tailwind CSS 4
-- Package manager: Bun
+- Python 3.10+
+- PyYAML (configuracion)
+- Flask (dashboard web opcional)
+- MTR + traceroute + whois (herramientas del sistema)

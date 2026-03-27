@@ -1,23 +1,23 @@
-# Ewinet Route Monitor - Provider Configuration
-# ================================================
-# Configure your upstream providers, test destinations, and expected baselines.
-# The monitor will compare live routes against these baselines to detect anomalies.
+# Ewinet Route Monitor - Configuracion de Proveedores (Diagnostico Local)
+# ========================================================================
+# Ejecutar desde tu PC para diagnosticar rutas de tus proveedores ISP.
+# Los cambios en MikroTik (rutas estaticas) los haces manualmente.
 
 general:
-  poll_interval_seconds: 300        # How often to run the full monitoring cycle
-  mtr_cycles: 10                    # Number of MTR probe cycles per test
-  mtr_max_hops: 30                  # Maximum hops for MTR
-  alert_cooldown_seconds: 600       # Minimum time between duplicate alerts
+  poll_interval_seconds: 120        # Intervalo entre ciclos de monitoreo
+  mtr_cycles: 10                    # Ciclos de probe MTR por test
+  mtr_max_hops: 30                  # Max saltos MTR
+  alert_cooldown_seconds: 300       # Tiempo minimo entre alertas duplicadas
   log_level: INFO                   # DEBUG, INFO, WARNING, ERROR
-  data_retention_days: 30           # How long to keep historical data
-  enable_mikrotik: true             # Enable MikroTik integration
-  enable_telegram: true             # Enable Telegram alerts
+  data_retention_days: 7            # Dias de retencion de datos historicos
+  enable_mikrotik: false            # Deshabilitado - tu gestionas MikroTik
+  enable_telegram: false            # Deshabilitado - diagnostico local
 
 providers:
   - name: Inter
     asn: 10929
-    gateway: "10.0.0.1"             # Next-hop IP from your router
-    local_interface: "ether2"       # Physical interface or VLAN on MikroTik
+    gateway: ""                     # Sin source IP - se hace traceroute desde tu PC
+    local_interface: "ether2"
     vlan_id: "100"
     test_destinations:
       - "8.8.8.8"
@@ -28,11 +28,11 @@ providers:
       known_transit_asns: [3356, 174, 1299, 6453, 3257]
       expected_first_hop_asn: 3356
       baseline_rtt_avg: 65.0
-    description: "Primary upstream - Inter (AS10929)"
+    description: "Upstream primario - Inter (AS10929)"
 
   - name: Digitel
     asn: 15135
-    gateway: "172.16.0.1"
+    gateway: ""
     local_interface: "ether3"
     vlan_id: "200"
     test_destinations:
@@ -44,11 +44,11 @@ providers:
       known_transit_asns: [1299, 3356, 174, 2914]
       expected_first_hop_asn: 1299
       baseline_rtt_avg: 70.0
-    description: "Secondary upstream - Digitel (AS15135)"
+    description: "Upstream secundario - Digitel (AS15135)"
 
   - name: Besser
     asn: 263220
-    gateway: "192.168.1.1"
+    gateway: ""
     local_interface: "ether4"
     vlan_id: "300"
     test_destinations:
@@ -60,9 +60,9 @@ providers:
       known_transit_asns: [174, 3356, 1299, 6453]
       expected_first_hop_asn: 174
       baseline_rtt_avg: 80.0
-    description: "Tertiary upstream - Besser (AS263220)"
+    description: "Upstream terciario - Besser (AS263220)"
 
-# ASN name registry for human-readable output
+# Registro de ASN para output legible
 asn_registry:
   10929: "Inter"
   15135: "Digitel"
@@ -85,7 +85,7 @@ asn_registry:
   20473: "Choopa/Vultr"
   14061: "DigitalOcean"
 
-# Known dangerous/unexpected transit ASNs that should trigger alerts
+# ASNs sospechosos que deberian trigger alertas
 suspicious_transit_asns:
   - 6147:   # Telefonica del Peru
   - 27699:  # Telecom Argentina

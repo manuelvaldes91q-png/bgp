@@ -1,72 +1,71 @@
-# Active Context: Ewinet Route Monitor
+# Active Context: Ewinet Route Monitor - Diagnostico Local
 
 ## Current State
 
-**Status**: ✅ Python monitoring application built and ready for deployment
+**Status**: Herramienta de diagnostico local para identificar cambios de ruta de ISPs
 
-The `ewinet-monitor/` directory contains a complete ISP route monitoring application for Ewinet. The Next.js base template remains untouched in the project root.
+La aplicacion se ejecuta desde tu PC como herramienta de diagnostico. MikroTik y Telegram estan deshabilitados - tu gestionas los cambios de rutas estaticas manualmente en el router.
 
-## Recently Completed
+## Uso Recomendado
 
-- [x] Complete Python application architecture (data models, modules, orchestrator)
-- [x] Route monitoring module using MTR + whois ASN lookups (`modules/route_monitor.py`)
-- [x] Route change detection with baseline comparison (`modules/route_analyzer.py`)
-- [x] Performance metrics collection (RTT, packet loss) (`modules/performance.py`)
-- [x] MikroTik RouterOS API/SSH integration (`modules/mikrotik.py`)
-- [x] Telegram Bot API alerting with formatted alerts (`modules/alerter.py`)
-- [x] YAML-based provider configuration (`config/providers.yaml`)
-- [x] Main orchestrator with daemon and single-cycle modes (`main.py`)
-- [x] PM2 deployment configuration (`ecosystem.config.js`)
-- [x] Automated deployment script (`deploy.sh`)
-- [x] Complete README with architecture and deployment guide
+```bash
+# Diagnostico rapido (un solo ciclo)
+python main.py --once
 
-## Project Structure
+# Diagnostico con mas detalle
+python main.py --once --log-level DEBUG
 
-| File/Directory | Purpose |
-|----------------|---------|
-| `ewinet-monitor/main.py` | Orchestrator entry point (daemon + web server) |
-| `ewinet-monitor/config/providers.yaml` | Provider definitions (Inter, Digitel, Besser) & baselines |
-| `ewinet-monitor/config/settings.py` | YAML + env config loader |
-| `ewinet-monitor/modules/route_monitor.py` | MTR/traceroute + ASN whois enrichment |
-| `ewinet-monitor/modules/route_analyzer.py` | Baseline comparison, anomaly detection |
-| `ewinet-monitor/modules/performance.py` | RTT & packet loss metrics |
-| `ewinet-monitor/modules/mikrotik.py` | MikroTik RouterOS API/SSH |
-| `ewinet-monitor/modules/alerter.py` | Telegram notifications |
-| `ewinet-monitor/modules/web_server.py` | Flask web dashboard server + REST API |
-| `ewinet-monitor/web/templates/dashboard.html` | Dashboard HTML template |
-| `ewinet-monitor/web/static/css/dashboard.css` | Dashboard styles (dark theme) |
-| `ewinet-monitor/web/static/js/dashboard.js` | Dashboard JS (auto-refresh 15s) |
-| `ewinet-monitor/models/data_models.py` | Data classes (RouteSnapshot, ASN, RouteAnomaly, etc.) |
-| `ewinet-monitor/deploy.sh` | Automated deployment script |
-| `ewinet-monitor/ecosystem.config.js` | PM2 process manager config |
+# Modo daemon con dashboard web en http://localhost:8080
+python main.py
 
-## Key Design Decisions
-
-- **MTR + whois** approach: Uses `mtr --json` for route probing + `whois -h whois.cymru.com` for ASN lookups per hop
-- **Baseline learning**: First run learns routes as baseline; subsequent runs compare against stored baselines
-- **Alert cooldown**: 10-minute default cooldown between duplicate alerts for the same provider/destination
-- **Optional MikroTik**: `routeros_api` is optional; falls back to SSH if API unavailable
-- **No external Python deps beyond pyyaml**: Telegram uses stdlib `urllib.request`, MikroTik SSH uses `subprocess`
-
-## Provider Configuration
-
-```yaml
-providers:
-  Inter:   AS10929, gateway 10.x.x.x, expected transit via Level3(3356)
-  Digitel: AS15135, gateway 172.x.x.x, expected transit via Arelion(1299)
-  Besser:  AS263220, gateway 192.x.x.x, expected transit via Cogent(174)
+# Con scripts de inicio
+./run.sh --once          # Linux/Mac
+run.bat --once           # Windows
 ```
 
-## Deployment Notes
+## Que Hace el Diagnostico
 
-- Python 3.10+ required (uses `X | Y` union type syntax, `match` statements avoided for compat)
-- System deps: `mtr-tiny`, `traceroute`, `whois`
-- PM2 handles process management and auto-restart
-- `.env` holds secrets, `providers.yaml` holds network config
+1. **Probing de rutas**: Hace MTR a cada destino de prueba (8.8.8.8, 1.1.1.1, etc.) por cada proveedor
+2. **ASN enrichment**: Consulta whois.cymru.com para identificar el ASN de cada hop
+3. **Comparacion de baseline**: Compara la ruta actual contra la ruta esperada configurada
+4. **Deteccion de anomalias**: Identifica ASN inesperados, ASNs faltantes, cambios de primer hop, latencia alta
+5. **Output detallado**: Muestra AS Path, hops relevantes, performance y alertas en consola
+
+## Cambios Recientes (2026-03-27)
+
+- Configuracion simplificada para uso local (MikroTik OFF, Telegram OFF)
+- Gateways vacios - el traceroute se hace desde tu PC
+- `run_once()` mejorado con output detallado en consola
+- Scripts de arranque para Linux/Mac (`run.sh`) y Windows (`run.bat`)
+- `route_monitor.py` actualizado para manejar gateways vacios
+
+## Proveedores Configurados
+
+| Proveedor | ASN      | Transito Esperado       |
+|-----------|----------|-------------------------|
+| Inter     | AS10929  | Level3/Lumen (3356)     |
+| Digitel   | AS15135  | Arelion/Telia (1299)    |
+| Besser    | AS263220 | Cogent (174)            |
+
+## Dependencias del Sistema
+
+- `mtr-tiny` o `mtr`
+- `traceroute`
+- `whois`
+
+```bash
+# Ubuntu/Debian
+sudo apt install mtr-tiny traceroute whois
+
+# macOS
+brew install mtr traceroute whois
+```
 
 ## Session History
 
 | Date | Changes |
 |------|---------|
-| 2026-03-27 | Built complete ewinet-monitor Python application with all 6 modules |
-| 2026-03-27 | Added Flask web dashboard with real-time visualization, REST API, dark theme |
+| 2026-03-27 | Simplified for local PC diagnostic use |
+| 2026-03-27 | Added run scripts (run.sh, run.bat) |
+| 2026-03-27 | Improved --once mode with detailed console output |
+| 2026-03-27 | Disabled MikroTik and Telegram integrations |

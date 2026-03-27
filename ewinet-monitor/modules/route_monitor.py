@@ -310,12 +310,15 @@ class RouteMonitor:
 
         for provider in self.settings.providers:
             for dest in provider.test_destinations:
+                # Use gateway as source_ip only if it's set (not empty)
+                # Empty gateway means probe from local PC
+                source = provider.gateway if provider.gateway else ""
                 snapshot = self.probe_route(
                     provider_name=provider.name,
                     provider_asn=provider.asn,
                     gateway=provider.gateway,
                     destination=dest,
-                    source_ip=provider.gateway,
+                    source_ip=source,
                 )
                 snapshot.physical_interface = provider.local_interface
                 snapshot.vlan_id = provider.vlan_id

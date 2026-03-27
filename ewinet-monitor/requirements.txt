@@ -1,9 +1,12 @@
-# Core dependencies
+# Ewinet Route Monitor - Dependencias
+# Instalar con: pip install -r requirements.txt
+
+# Core (obligatorio)
 pyyaml>=6.0,<7.0
 flask>=3.0,<4.0
 
-# MikroTik API (optional - only needed if using API mode)
+# MikroTik API (opcional - solo si usas modo API)
 # routeros-api>=1.0.4
 
-# Optional: Enhanced ASN lookup
+# ASN lookup mejorado (opcional)
 # ipwhois>=2.0.0
