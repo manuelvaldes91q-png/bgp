@@ -473,3 +473,204 @@ function esc(str) {
     div.textContent = String(str);
     return div.innerHTML;
 }
+
+/* ════════════════ SPEEDTEST ════════════════ */
+
+let speedtestPollInterval = null;
+
+async function checkSpeedtestStatus() {
+    try {
+        const data = await fetchJSON('/api/speedtest/status');
+        const badge = document.getElementById('speedtest-status');
+        const btn = document.getElementById('btn-run-speedtest');
+
+        if (!data.available) {
+            badge.textContent = 'NO DISPONIBLE';
+            badge.className = 'speedtest-status-badge unavailable';
+            if (btn) btn.disabled = true;
+            return;
+        }
+
+        badge.textContent = data.version || 'Disponible';
+        badge.className = 'speedtest-status-badge available';
+        if (btn) btn.disabled = false;
+
+        if (data.last_result) {
+            displaySpeedtestResult(data.last_result);
+        }
+    } catch (e) {
+        document.getElementById('speedtest-status').textContent = 'Error';
+    }
+}
+
+async function loadSpeedtestServers() {
+    const select = document.getElementById('speedtest-server');
+    select.innerHTML = '<option value="">Cargando servidores...</option>';
+
+    try {
+        const servers = await fetchJSON('/api/speedtest/servers');
+
+        select.innerHTML = '<option value="">Auto (mejor servidor)</option>';
+
+        // Group by country
+        const byCountry = {};
+        servers.forEach(s => {
+            if (!byCountry[s.country]) byCountry[s.country] = [];
+            byCountry[s.country].push(s);
+        });
+
+        Object.keys(byCountry).sort().forEach(country => {
+            const group = document.createElement('optgroup');
+            group.label = country;
+            byCountry[country].forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.server_id;
+                opt.textContent = `${s.sponsor || s.name} - ${s.city} (${s.distance_km}km, ${s.latency_ms}ms)`;
+                group.appendChild(opt);
+            });
+            select.appendChild(group);
+        });
+    } catch (e) {
+        select.innerHTML = '<option value="">Error cargando servidores</option>';
+    }
+}
+
+async function runSpeedtest() {
+    const btn = document.getElementById('btn-run-speedtest');
+    const progress = document.getElementById('speedtest-progress');
+    const results = document.getElementById('speedtest-results');
+
+    if (btn.disabled) return;
+
+    const serverId = document.getElementById('speedtest-server').value;
+
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>EJECUTANDO...</span>';
+
+    progress.style.display = 'block';
+    results.style.opacity = '0.3';
+
+    try {
+        const res = await fetch('/api/speedtest/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ server_id: serverId }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to start');
+        }
+
+        // Poll for result
+        startSpeedtestPoll();
+    } catch (e) {
+        resetSpeedtestBtn();
+        progress.style.display = 'none';
+        results.style.opacity = '1';
+        alert('Error: ' + e.message);
+    }
+}
+
+function startSpeedtestPoll() {
+    if (speedtestPollInterval) clearInterval(speedtestPollInterval);
+
+    speedtestPollInterval = setInterval(async () => {
+        try {
+            const data = await fetchJSON('/api/speedtest/status');
+
+            if (data.running) {
+                document.getElementById('speedtest-status').textContent = 'Ejecutando...';
+                document.getElementById('speedtest-status').className = 'speedtest-status-badge running';
+                return;
+            }
+
+            // Test finished
+            clearInterval(speedtestPollInterval);
+            speedtestPollInterval = null;
+
+            if (data.last_result) {
+                displaySpeedtestResult(data.last_result);
+            }
+
+            resetSpeedtestBtn();
+            document.getElementById('speedtest-progress').style.display = 'none';
+            document.getElementById('speedtest-results').style.opacity = '1';
+
+            // Refresh history
+            loadSpeedtestHistory();
+        } catch (e) {
+            clearInterval(speedtestPollInterval);
+            resetSpeedtestBtn();
+        }
+    }, 2000);
+}
+
+function displaySpeedtestResult(r) {
+    if (r.error) {
+        document.getElementById('st-download').textContent = 'ERR';
+        document.getElementById('st-upload').textContent = 'ERR';
+        return;
+    }
+
+    document.getElementById('st-download').textContent = r.download_mbps > 0 ? r.download_mbps.toFixed(1) : '--';
+    document.getElementById('st-upload').textContent = r.upload_mbps > 0 ? r.upload_mbps.toFixed(1) : '--';
+    document.getElementById('st-ping').textContent = r.latency_ms > 0 ? r.latency_ms.toFixed(1) : '--';
+    document.getElementById('st-jitter').textContent = r.jitter_ms > 0 ? r.jitter_ms.toFixed(1) : '--';
+
+    // Bars (scale to 1000 Mbps max)
+    const downPct = Math.min((r.download_mbps / 1000) * 100, 100);
+    const upPct = Math.min((r.upload_mbps / 1000) * 100, 100);
+    document.getElementById('st-download-bar').style.width = downPct + '%';
+    document.getElementById('st-upload-bar').style.width = upPct + '%';
+
+    // Meta
+    const serverParts = [r.server_sponsor || r.server_name, r.server_city, r.server_country].filter(Boolean);
+    document.getElementById('st-server').textContent = serverParts.join(' - ') || '--';
+    document.getElementById('st-isp').textContent = r.isp || '--';
+    document.getElementById('st-ip').textContent = r.external_ip || '--';
+    document.getElementById('st-duration').textContent = r.duration_seconds > 0 ? r.duration_seconds.toFixed(1) + 's' : '--';
+}
+
+function resetSpeedtestBtn() {
+    const btn = document.getElementById('btn-run-speedtest');
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg><span>EJECUTAR TEST</span>';
+
+    document.getElementById('speedtest-status').textContent = 'Disponible';
+    document.getElementById('speedtest-status').className = 'speedtest-status-badge available';
+}
+
+async function loadSpeedtestHistory() {
+    try {
+        const history = await fetchJSON('/api/speedtest/history');
+        if (!history.length) return;
+
+        document.getElementById('speedtest-history-section').style.display = 'block';
+        const list = document.getElementById('speedtest-history-list');
+
+        let html = '';
+        history.slice().reverse().forEach(r => {
+            if (r.error) return;
+            const time = new Date(r.timestamp * 1000).toLocaleTimeString();
+            html += `<div class="st-history-item">
+                <span class="st-h-time">${esc(time)}</span>
+                <span class="st-h-down">${r.download_mbps.toFixed(1)} Mbps</span>
+                <span class="st-h-up">${r.upload_mbps.toFixed(1)} Mbps</span>
+                <span class="st-h-ping">${r.latency_ms.toFixed(1)}ms</span>
+                <span class="st-h-server">${esc(r.server_sponsor || r.server_name || '')}</span>
+            </div>`;
+        });
+        list.innerHTML = html || '<div class="empty-state">Sin historial</div>';
+    } catch (e) {}
+}
+
+// Init speedtest on load
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        checkSpeedtestStatus();
+        loadSpeedtestHistory();
+    }, 1000);
+});

@@ -153,6 +153,87 @@
             </div>
         </section>
 
+        <!-- Speedtest -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Speedtest - Ookla CLI
+                </h2>
+                <div class="section-actions">
+                    <span id="speedtest-status" class="speedtest-status-badge">Checking...</span>
+                </div>
+            </div>
+            <div class="speedtest-panel">
+                <!-- Controls -->
+                <div class="speedtest-controls">
+                    <div class="speedtest-server-select">
+                        <label class="speedtest-label">SERVIDOR</label>
+                        <div class="speedtest-select-wrap">
+                            <select id="speedtest-server" class="speedtest-select">
+                                <option value="">Auto (mejor servidor)</option>
+                            </select>
+                            <button class="btn-icon" onclick="loadSpeedtestServers()" title="Cargar servidores">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-speedtest" id="btn-run-speedtest" onclick="runSpeedtest()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        <span>EJECUTAR TEST</span>
+                    </button>
+                </div>
+
+                <!-- Results Display -->
+                <div class="speedtest-results" id="speedtest-results">
+                    <div class="speedtest-gauges">
+                        <div class="speedtest-gauge">
+                            <div class="gauge-label">DOWNLOAD</div>
+                            <div class="gauge-value" id="st-download">--</div>
+                            <div class="gauge-unit">Mbps</div>
+                            <div class="gauge-bar"><div class="gauge-bar-fill gauge-download" id="st-download-bar" style="width:0%"></div></div>
+                        </div>
+                        <div class="speedtest-gauge">
+                            <div class="gauge-label">UPLOAD</div>
+                            <div class="gauge-value" id="st-upload">--</div>
+                            <div class="gauge-unit">Mbps</div>
+                            <div class="gauge-bar"><div class="gauge-bar-fill gauge-upload" id="st-upload-bar" style="width:0%"></div></div>
+                        </div>
+                        <div class="speedtest-gauge gauge-small">
+                            <div class="gauge-label">LATENCIA</div>
+                            <div class="gauge-value" id="st-ping">--</div>
+                            <div class="gauge-unit">ms</div>
+                        </div>
+                        <div class="speedtest-gauge gauge-small">
+                            <div class="gauge-label">JITTER</div>
+                            <div class="gauge-value" id="st-jitter">--</div>
+                            <div class="gauge-unit">ms</div>
+                        </div>
+                    </div>
+                    <div class="speedtest-meta" id="st-meta">
+                        <div class="st-meta-item"><span class="st-meta-label">Servidor</span><span class="st-meta-value" id="st-server">--</span></div>
+                        <div class="st-meta-item"><span class="st-meta-label">ISP</span><span class="st-meta-value" id="st-isp">--</span></div>
+                        <div class="st-meta-item"><span class="st-meta-label">IP</span><span class="st-meta-value" id="st-ip">--</span></div>
+                        <div class="st-meta-item"><span class="st-meta-label">Duracion</span><span class="st-meta-value" id="st-duration">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="speedtest-progress" id="speedtest-progress" style="display:none">
+                    <div class="loading-spinner"></div>
+                    <p>Ejecutando speedtest... esto puede tomar 30-60 segundos</p>
+                </div>
+
+                <!-- History -->
+                <div class="speedtest-history" id="speedtest-history-section" style="display:none">
+                    <div class="speedtest-history-header">
+                        <span class="speedtest-label">HISTORIAL</span>
+                    </div>
+                    <div class="speedtest-history-list" id="speedtest-history-list"></div>
+                </div>
+            </div>
+        </section>
+
         <!-- History + Baselines -->
         <div class="two-col">
             <section class="section">

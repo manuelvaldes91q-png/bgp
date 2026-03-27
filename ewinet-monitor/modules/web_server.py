@@ -207,6 +207,62 @@ def create_app(settings: Settings) -> Any:
                 pass
         return jsonify({})
 
+    # ── Speedtest Endpoints ──
+
+    from modules.speedtest import SpeedtestRunner
+
+    speedtest_runner = SpeedtestRunner()
+
+    @app.route("/api/speedtest/status")
+    def api_speedtest_status() -> Any:
+        available, version = speedtest_runner.check_available()
+        last = speedtest_runner.last_result
+        return jsonify({
+            "available": available,
+            "version": version,
+            "running": speedtest_runner.is_running,
+            "last_result": speedtest_runner.to_dict(last) if last else None,
+        })
+
+    @app.route("/api/speedtest/servers")
+    def api_speedtest_servers() -> Any:
+        servers = speedtest_runner.list_servers()
+        return jsonify([
+            {
+                "server_id": s.server_id,
+                "name": s.name,
+                "sponsor": s.sponsor,
+                "country": s.country,
+                "city": s.city,
+                "distance_km": round(s.distance_km, 1),
+                "latency_ms": round(s.latency_ms, 1),
+            }
+            for s in servers[:100]
+        ])
+
+    @app.route("/api/speedtest/run", methods=["POST"])
+    def api_speedtest_run() -> Any:
+        if speedtest_runner.is_running:
+            return jsonify({"error": "A speedtest is already running"}), 409
+
+        data = request.get_json(silent=True) or {}
+        server_id = str(data.get("server_id", ""))
+
+        speedtest_runner.run_test_async(server_id)
+        return jsonify({"status": "started", "server_id": server_id or "auto"})
+
+    @app.route("/api/speedtest/result")
+    def api_speedtest_result() -> Any:
+        last = speedtest_runner.last_result
+        if not last:
+            return jsonify({"error": "No results yet"}), 404
+        return jsonify(speedtest_runner.to_dict(last))
+
+    @app.route("/api/speedtest/history")
+    def api_speedtest_history() -> Any:
+        history = speedtest_runner.history
+        return jsonify([speedtest_runner.to_dict(r) for r in history])
+
     return app
 
 
