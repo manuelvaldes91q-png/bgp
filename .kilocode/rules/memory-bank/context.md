@@ -4,68 +4,52 @@
 
 **Status**: Herramienta de diagnostico local para identificar cambios de ruta de ISPs
 
-La aplicacion se ejecuta desde tu PC como herramienta de diagnostico. MikroTik y Telegram estan deshabilitados - tu gestionas los cambios de rutas estaticas manualmente en el router.
+La app se ejecuta desde tu PC detras de MikroTik. Detecta tu IP publica automaticamente, hace traceroute a los destinos configurados, y muestra la ruta AS completa con comparacion contra baselines.
 
-## Uso Recomendado
+## Uso
 
 ```bash
-# Diagnostico rapido (un solo ciclo)
+cd ewinet-monitor
+pip install -r requirements.txt
+
+# Diagnostico rapido
 python main.py --once
 
-# Diagnostico con mas detalle
-python main.py --once --log-level DEBUG
-
-# Modo daemon con dashboard web en http://localhost:8080
+# Modo daemon + dashboard web
 python main.py
-
-# Con scripts de inicio
-./run.sh --once          # Linux/Mac
-run.bat --once           # Windows
 ```
 
-## Que Hace el Diagnostico
+## Flujo del Diagnostico (--once)
 
-1. **Probing de rutas**: Hace MTR a cada destino de prueba (8.8.8.8, 1.1.1.1, etc.) por cada proveedor
-2. **ASN enrichment**: Consulta whois.cymru.com para identificar el ASN de cada hop
-3. **Comparacion de baseline**: Compara la ruta actual contra la ruta esperada configurada
-4. **Deteccion de anomalias**: Identifica ASN inesperados, ASNs faltantes, cambios de primer hop, latencia alta
-5. **Output detallado**: Muestra AS Path, hops relevantes, performance y alertas en consola
+1. **Detectar IP publica** - Consulta ipify/ifconfig.me para saber tu IP publica actual
+2. **Traceroute a destinos** - Hace MTR a cada destino configurado (8.8.8.8, 1.1.1.1, etc.)
+3. **Enriquecer con ASN** - Consulta whois.cymru.com para cada hop publico
+4. **Comparar contra baselines** - Muestra si la ruta coincide o cambio
 
-## Cambios Recientes (2026-03-27)
+## Configuracion (providers.yaml)
 
-- Configuracion simplificada para uso local (MikroTik OFF, Telegram OFF)
-- Gateways vacios - el traceroute se hace desde tu PC
-- `run_once()` mejorado con output detallado en consola
-- Scripts de arranque para Linux/Mac (`run.sh`) y Windows (`run.bat`)
-- `route_monitor.py` actualizado para manejar gateways vacios
-
-## Proveedores Configurados
-
-| Proveedor | ASN      | Transito Esperado       |
-|-----------|----------|-------------------------|
-| Inter     | AS10929  | Level3/Lumen (3356)     |
-| Digitel   | AS15135  | Arelion/Telia (1299)    |
-| Besser    | AS263220 | Cogent (174)            |
-
-## Dependencias del Sistema
-
-- `mtr-tiny` o `mtr`
-- `traceroute`
-- `whois`
-
-```bash
-# Ubuntu/Debian
-sudo apt install mtr-tiny traceroute whois
-
-# macOS
-brew install mtr traceroute whois
+```yaml
+destinations:
+  - destination: "8.8.8.8"
+    description: "Google DNS"
+  - destination: "1.1.1.1"
+    description: "Cloudflare DNS"
 ```
+
+Los baselines se aprenden automaticamente en la primera ejecucion si no se configuran.
+
+## Arquitectura Actual
+
+- `route_monitor.py` - detect_public_ip() + probe_route() con MTR/whois
+- `route_analyzer.py` - Comparacion por destino (no por proveedor)
+- `settings.py` - DestinationConfig en vez de ProviderConfig
+- `web_server.py` - API con /api/destinations y public_ip
 
 ## Session History
 
 | Date | Changes |
 |------|---------|
-| 2026-03-27 | Simplified for local PC diagnostic use |
+| 2026-03-27 | Auto-detect public IP, destination-based config, auto-learn baselines |
+| 2026-03-27 | Simplified for local PC diagnostic (MikroTik/Telegram OFF) |
 | 2026-03-27 | Added run scripts (run.sh, run.bat) |
 | 2026-03-27 | Improved --once mode with detailed console output |
-| 2026-03-27 | Disabled MikroTik and Telegram integrations |
