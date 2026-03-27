@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ewinet Route Monitor - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-left">
+            <div class="logo">
+                <span class="logo-icon">🌐</span>
+                <h1>Ewinet <span class="logo-sub">Route Monitor</span></h1>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <div class="status-badge" id="system-status">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text">Loading...</span>
+            </div>
+            <div class="cycle-info">
+                Cycle: <strong id="cycle-count">0</strong>
+            </div>
+            <div class="last-update" id="last-update">
+                Last update: --
+            </div>
+            <button class="btn-refresh" onclick="refreshAll()" title="Refresh now">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <!-- Summary Cards -->
+        <section class="summary-cards" id="summary-cards">
+            <div class="card card-providers">
+                <div class="card-icon">📡</div>
+                <div class="card-body">
+                    <div class="card-value" id="total-providers">--</div>
+                    <div class="card-label">Proveedores</div>
+                </div>
+            </div>
+            <div class="card card-routes-ok">
+                <div class="card-icon">✅</div>
+                <div class="card-body">
+                    <div class="card-value" id="routes-ok">--</div>
+                    <div class="card-label">Rutas OK</div>
+                </div>
+            </div>
+            <div class="card card-anomalies">
+                <div class="card-icon">⚠️</div>
+                <div class="card-body">
+                    <div class="card-value" id="anomaly-count">--</div>
+                    <div class="card-label">Anomalías</div>
+                </div>
+            </div>
+            <div class="card card-avg-latency">
+                <div class="card-icon">⏱️</div>
+                <div class="card-body">
+                    <div class="card-value" id="avg-latency">--</div>
+                    <div class="card-label">Latencia Prom.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Provider Route Cards -->
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">🗺️</span>
+                Estado de Rutas por Proveedor
+            </h2>
+            <div class="providers-grid" id="providers-grid">
+                <div class="loading-placeholder">Cargando datos de rutas...</div>
+            </div>
+        </section>
+
+        <!-- Performance Metrics -->
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">📊</span>
+                Métricas de Rendimiento
+            </h2>
+            <div class="perf-grid" id="perf-grid">
+                <div class="loading-placeholder">Cargando métricas...</div>
+            </div>
+        </section>
+
+        <!-- Active Anomalies -->
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">🚨</span>
+                Alertas Activas
+                <span class="badge" id="active-alerts-badge">0</span>
+            </h2>
+            <div class="alerts-list" id="alerts-list">
+                <div class="empty-state">No hay alertas activas</div>
+            </div>
+        </section>
+
+        <!-- Route History Timeline -->
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">📜</span>
+                Historial de Rutas
+            </h2>
+            <div class="history-controls">
+                <select id="history-filter">
+                    <option value="all">Todos los proveedores</option>
+                </select>
+                <button class="btn-secondary" onclick="loadHistory()">Ver Historial</button>
+            </div>
+            <div class="history-table-wrap">
+                <table class="history-table" id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Proveedor</th>
+                            <th>Destino</th>
+                            <th>AS-PATH</th>
+                            <th>Hops</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody">
+                        <tr><td colspan="6" class="empty-state">Sin datos de historial</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Baselines Info -->
+        <section class="section">
+            <h2 class="section-title">
+                <span class="section-icon">📋</span>
+                Líneas Base Configuradas
+            </h2>
+            <div class="baselines-grid" id="baselines-grid">
+                <div class="loading-placeholder">Cargando baselines...</div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>Ewinet Route Monitor v1.0 &mdash; ISP Network Operations</span>
+        <span id="footer-uptime"></span>
+    </footer>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

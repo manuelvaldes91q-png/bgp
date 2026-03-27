@@ -24,7 +24,7 @@ The `ewinet-monitor/` directory contains a complete ISP route monitoring applica
 
 | File/Directory | Purpose |
 |----------------|---------|
-| `ewinet-monitor/main.py` | Orchestrator entry point |
+| `ewinet-monitor/main.py` | Orchestrator entry point (daemon + web server) |
 | `ewinet-monitor/config/providers.yaml` | Provider definitions (Inter, Digitel, Besser) & baselines |
 | `ewinet-monitor/config/settings.py` | YAML + env config loader |
 | `ewinet-monitor/modules/route_monitor.py` | MTR/traceroute + ASN whois enrichment |
@@ -32,6 +32,10 @@ The `ewinet-monitor/` directory contains a complete ISP route monitoring applica
 | `ewinet-monitor/modules/performance.py` | RTT & packet loss metrics |
 | `ewinet-monitor/modules/mikrotik.py` | MikroTik RouterOS API/SSH |
 | `ewinet-monitor/modules/alerter.py` | Telegram notifications |
+| `ewinet-monitor/modules/web_server.py` | Flask web dashboard server + REST API |
+| `ewinet-monitor/web/templates/dashboard.html` | Dashboard HTML template |
+| `ewinet-monitor/web/static/css/dashboard.css` | Dashboard styles (dark theme) |
+| `ewinet-monitor/web/static/js/dashboard.js` | Dashboard JS (auto-refresh 15s) |
 | `ewinet-monitor/models/data_models.py` | Data classes (RouteSnapshot, ASN, RouteAnomaly, etc.) |
 | `ewinet-monitor/deploy.sh` | Automated deployment script |
 | `ewinet-monitor/ecosystem.config.js` | PM2 process manager config |
@@ -65,3 +69,4 @@ providers:
 | Date | Changes |
 |------|---------|
 | 2026-03-27 | Built complete ewinet-monitor Python application with all 6 modules |
+| 2026-03-27 | Added Flask web dashboard with real-time visualization, REST API, dark theme |

@@ -4,7 +4,7 @@ module.exports = {
       name: "ewinet-monitor",
       script: "main.py",
       interpreter: "python3",
-      args: "",
+      args: "--port 8080",
       cwd: "/opt/ewinet-monitor",
       instances: 1,
       autorestart: true,

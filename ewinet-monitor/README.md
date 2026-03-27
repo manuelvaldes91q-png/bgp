@@ -6,7 +6,7 @@ ISP upstream route monitoring system for detecting BGP path changes, latency deg
 
 ```
 ewinet-monitor/
-├── main.py                      # Orchestrator entry point
+├── main.py                      # Orchestrator entry point (daemon + web)
 ├── config/
 │   ├── settings.py              # Configuration loader (YAML + .env)
 │   └── providers.yaml           # Provider definitions & baselines
@@ -15,7 +15,13 @@ ewinet-monitor/
 │   ├── route_analyzer.py        # Baseline comparison & anomaly detection
 │   ├── performance.py           # RTT & packet loss metrics
 │   ├── mikrotik.py              # MikroTik RouterOS API/SSH integration
-│   └── alerter.py               # Telegram Bot API notifications
+│   ├── alerter.py               # Telegram Bot API notifications
+│   └── web_server.py            # Flask web dashboard + REST API
+├── web/
+│   ├── templates/dashboard.html # Dashboard UI template
+│   └── static/
+│       ├── css/dashboard.css    # Dark theme styles
+│       └── js/dashboard.js      # Auto-refresh client
 ├── models/
 │   └── data_models.py           # Data classes
 ├── data/                        # Persisted baselines & history
@@ -108,6 +114,36 @@ pm2 restart ewinet-monitor
 # Auto-start on boot
 pm2 startup
 pm2 save
+```
+
+## Dashboard Web
+
+El monitor incluye un dashboard web en tiempo real accesible en `http://<servidor-ip>:8080`.
+
+**Características del Dashboard:**
+- **Tarjetas de resumen**: Total proveedores, rutas OK, anomalías activas, latencia promedio
+- **Visualización de AS-PATH**: Ruta visual por cada proveedor/destino con nodos ASN coloreados
+- **Detección visual de anomalías**: ASNs inesperados resaltados en rojo con animación de pulso
+- **Métricas de rendimiento**: RTT (min/avg/max), pérdida de paquetes con barras de progreso
+- **Alertas activas**: Lista de anomalías con ruta esperada vs. detectada
+- **Historial de rutas**: Tabla filtrable por proveedor
+- **Líneas base configuradas**: Resumen de la configuración por proveedor
+- **Auto-refresh**: Actualización cada 15 segundos
+
+**Endpoints REST API:**
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/status` | Estado del sistema, uptime, ciclo actual |
+| `GET /api/snapshots` | Snapshots de rutas actuales |
+| `GET /api/performance` | Métricas de rendimiento |
+| `GET /api/anomalies` | Anomalías detectadas |
+| `GET /api/providers` | Configuración de proveedores |
+| `GET /api/history` | Historial de rutas (JSONL) |
+| `GET /api/baselines` | Baselines almacenados |
+
+Cambiar el puerto:
+```bash
+python main.py --port 9090
 ```
 
 ## Configuration

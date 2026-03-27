@@ -15,6 +15,7 @@ from modules.mikrotik import MikroTikClient
 from modules.performance import PerformanceCollector
 from modules.route_analyzer import RouteAnalyzer
 from modules.route_monitor import RouteMonitor
+from modules.web_server import run_web_server, update_state
 
 PROJECT_ROOT = Path(__file__).parent
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -54,13 +55,14 @@ def setup_logging(level: str = "INFO") -> None:
 class EwinetMonitor:
     """Main application orchestrator."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, web_port: int = 8080):
         self.settings = settings
         self.route_monitor = RouteMonitor(settings)
         self.analyzer = RouteAnalyzer(settings)
         self.perf_collector = PerformanceCollector(settings)
         self.alerter = TelegramAlerter(settings.telegram)
         self.mikrotik: MikroTikClient | None = None
+        self.web_port = web_port
         self._running = True
         self._cycle_count = 0
 
@@ -148,6 +150,15 @@ class EwinetMonitor:
                 status,
             )
 
+        # Update web dashboard state
+        update_state(
+            snapshots=snapshots,
+            anomalies=anomalies,
+            performance=perf_metrics,
+            cycle_count=self._cycle_count,
+            status="running",
+        )
+
         elapsed = time.time() - cycle_start
         logger.info("Cycle #%d completed in %.1fs", self._cycle_count, elapsed)
 
@@ -158,6 +169,11 @@ class EwinetMonitor:
         logger.info("Starting Ewinet Route Monitor daemon")
         logger.info("Poll interval: %d seconds", interval)
         logger.info("Monitoring %d providers", len(self.settings.providers))
+
+        # Start web dashboard
+        run_web_server(self.settings, port=self.web_port)
+        logger.info("Dashboard available at http://0.0.0.0:%d", self.web_port)
+        update_state(status="running")
 
         if self.settings.general.enable_telegram:
             if self.alerter.test_connection():
@@ -186,6 +202,7 @@ class EwinetMonitor:
                 time.sleep(1)
 
         logger.info("Ewinet Route Monitor stopped after %d cycles", self._cycle_count)
+        update_state(status="stopped")
 
         if self.settings.general.enable_telegram:
             self.alerter.send_status_message("🔴 Monitor stopped.")
@@ -226,6 +243,10 @@ Examples:
         "--test-telegram", action="store_true",
         help="Test Telegram bot connectivity and exit",
     )
+    parser.add_argument(
+        "--port", type=int, default=8080,
+        help="Web dashboard port (default: 8080)",
+    )
     return parser.parse_args()
 
 
@@ -252,7 +273,7 @@ def main() -> None:
             print("Telegram connection FAILED")
             sys.exit(1)
 
-    monitor = EwinetMonitor(settings)
+    monitor = EwinetMonitor(settings, web_port=args.port)
 
     if args.once:
         monitor.run_once()
