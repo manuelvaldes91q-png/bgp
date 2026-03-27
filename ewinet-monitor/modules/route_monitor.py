@@ -7,6 +7,7 @@ import logging
 import re
 import socket
 import subprocess
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
@@ -14,6 +15,29 @@ from config.settings import Settings
 from models.data_models import ASN, ASPath, RouteHop, RouteSnapshot, RouteStatus
 
 logger = logging.getLogger(__name__)
+
+# Public IP detection services
+IP_DETECT_SERVICES = [
+    "https://api.ipify.org",
+    "https://ifconfig.me/ip",
+    "https://icanhazip.com",
+    "https://checkip.amazonaws.com",
+]
+
+
+def detect_public_ip() -> str:
+    """Detect current public IP address."""
+    for service in IP_DETECT_SERVICES:
+        try:
+            req = urllib.request.Request(service, headers={"User-Agent": "ewinet-monitor/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                ip = response.read().decode("utf-8").strip()
+                # Validate it's an IP
+                socket.inet_aton(ip)
+                return ip
+        except Exception:
+            continue
+    return ""
 
 
 def resolve_hostname(ip: str) -> str:
@@ -27,10 +51,9 @@ def resolve_hostname(ip: str) -> str:
 
 def infer_asn_from_hostname(hostname: str) -> tuple[int, str]:
     """Try to extract ASN information from hostname patterns."""
-    # Common patterns: AS12345.provider.net, 12345.provider.net
     patterns = [
-        r"as(\d+)",          # AS12345
-        r"^(\d{5,6})\.",     # 12345.something
+        r"as(\d+)",
+        r"^(\d{5,6})\.",
     ]
     for pattern in patterns:
         match = re.search(pattern, hostname, re.IGNORECASE)
@@ -53,7 +76,7 @@ class RouteMonitor:
             "--report",
             "--report-cycles", str(cycles),
             "--max-ttl", str(max_hops),
-            "--no-dns",  # Faster, we do reverse DNS separately
+            "--no-dns",
             destination,
         ]
         if source_ip:
@@ -97,7 +120,7 @@ class RouteMonitor:
                 return []
 
             hops: list[RouteHop] = []
-            for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            for line in result.stdout.strip().split("\n")[1:]:
                 hop = self._parse_traceroute_line(line)
                 if hop:
                     hops.append(hop)
@@ -116,7 +139,6 @@ class RouteMonitor:
             line,
         )
         if not match:
-            # Try with asterisks (no response)
             match_timeout = re.match(r"\s*(\d+)\s+\*", line)
             if match_timeout:
                 return RouteHop(
@@ -151,10 +173,8 @@ class RouteMonitor:
                 capture_output=True, text=True, timeout=15,
             )
             if result.returncode != 0:
-                # Fallback: try RADB whois
                 return self._lookup_asn_radb(ip)
 
-            # Parse the whois response - Bulk mode output
             lines = result.stdout.strip().split("\n")
             for line in lines:
                 if "BGP" in line or "|" in line:
@@ -167,7 +187,6 @@ class RouteMonitor:
                         except ValueError:
                             continue
 
-            # Fallback
             return self._lookup_asn_radb(ip)
 
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -191,7 +210,6 @@ class RouteMonitor:
 
     def enrich_hops_with_asn(self, hops: list[RouteHop]) -> list[RouteHop]:
         """Add ASN info to each hop using whois lookups."""
-        # Use ThreadPoolExecutor for parallel whois lookups
         ip_to_hop: dict[str, RouteHop] = {}
         for hop in hops:
             if hop.ip_address != "*" and hop.ip_address not in ip_to_hop:
@@ -225,20 +243,16 @@ class RouteMonitor:
 
     def probe_route(
         self,
-        provider_name: str,
-        provider_asn: int,
-        gateway: str,
         destination: str,
-        source_ip: str = "",
+        provider_name: str = "",
+        provider_asn: int = 0,
     ) -> RouteSnapshot:
         """Full route probe: MTR + ASN enrichment -> RouteSnapshot."""
-        logger.info(
-            "Probing route: %s (AS%d) -> %s", provider_name, provider_asn, destination
-        )
+        logger.info("Probing route to %s", destination)
 
-        # Step 1: Run MTR
+        # Run MTR
         mtr_data = self.run_mtr_json(
-            destination, source_ip=source_ip,
+            destination,
             cycles=self.settings.general.mtr_cycles,
             max_hops=self.settings.general.mtr_max_hops,
         )
@@ -249,7 +263,6 @@ class RouteMonitor:
             report = mtr_data.get("report", {})
             mtr_hops = report.get("hops", [])
             for h in mtr_hops:
-                # MTR JSON has nested structure
                 if isinstance(h, dict):
                     ip = h.get("host", {}).get("ip", "*")
                     loss = h.get("loss", 0.0)
@@ -272,25 +285,31 @@ class RouteMonitor:
         # Fallback to traceroute if MTR failed
         if not hops:
             logger.warning("MTR failed, falling back to traceroute for %s", destination)
-            hops = self.run_traceroute_asn(destination, source_ip=source_ip)
+            hops = self.run_traceroute_asn(destination)
 
-        # Step 2: Enrich with ASN data
+        # Enrich with ASN data
         hops = self.enrich_hops_with_asn(hops)
 
-        # Step 3: Build AS path
+        # Build AS path
         as_path = self.build_as_path(hops)
 
-        # Step 4: Determine status
+        # Determine status
         status = RouteStatus.NORMAL
         if not as_path.hops:
             status = RouteStatus.UNKNOWN
         elif any(h.loss_percent > 50 for h in hops):
             status = RouteStatus.DEGRADED
 
+        # Auto-detect provider from first non-private ASN if not specified
+        if not provider_name and as_path.hops:
+            first_public_asn = as_path.hops[0]
+            provider_name = first_public_asn.name or f"AS{first_public_asn.number}"
+            provider_asn = first_public_asn.number
+
         snapshot = RouteSnapshot(
             provider_name=provider_name,
             provider_asn=provider_asn,
-            gateway=gateway,
+            gateway="",
             destination=destination,
             as_path=as_path,
             hops=hops,
@@ -298,30 +317,22 @@ class RouteMonitor:
         )
 
         logger.info(
-            "Route snapshot for %s -> %s: %s (%d hops, %d ASNs)",
-            provider_name, destination, str(as_path), len(hops), len(as_path.hops),
+            "Route to %s: %s (%d hops, %d ASNs)",
+            destination, str(as_path), len(hops), len(as_path.hops),
         )
 
         return snapshot
 
     def probe_all_providers(self) -> list[RouteSnapshot]:
-        """Probe all configured providers sequentially."""
+        """Probe all configured destinations from local PC."""
         snapshots: list[RouteSnapshot] = []
 
-        for provider in self.settings.providers:
-            for dest in provider.test_destinations:
-                # Use gateway as source_ip only if it's set (not empty)
-                # Empty gateway means probe from local PC
-                source = provider.gateway if provider.gateway else ""
-                snapshot = self.probe_route(
-                    provider_name=provider.name,
-                    provider_asn=provider.asn,
-                    gateway=provider.gateway,
-                    destination=dest,
-                    source_ip=source,
-                )
-                snapshot.physical_interface = provider.local_interface
-                snapshot.vlan_id = provider.vlan_id
-                snapshots.append(snapshot)
+        for dest_config in self.settings.destinations:
+            snapshot = self.probe_route(
+                destination=dest_config.destination,
+                provider_name=dest_config.expected_provider or "",
+                provider_asn=dest_config.expected_asn or 0,
+            )
+            snapshots.append(snapshot)
 
         return snapshots

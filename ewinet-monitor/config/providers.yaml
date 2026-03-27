@@ -1,66 +1,41 @@
-# Ewinet Route Monitor - Configuracion de Proveedores (Diagnostico Local)
-# ========================================================================
-# Ejecutar desde tu PC para diagnosticar rutas de tus proveedores ISP.
-# Los cambios en MikroTik (rutas estaticas) los haces manualmente.
+# Ewinet Route Monitor - Configuracion de Diagnostico Local
+# ===========================================================
+# Ejecutar desde tu PC detras de MikroTik.
+# La app detecta tu IP publica y te muestra las rutas completas.
 
 general:
-  poll_interval_seconds: 120        # Intervalo entre ciclos de monitoreo
+  poll_interval_seconds: 120        # Intervalo entre ciclos (modo daemon)
   mtr_cycles: 10                    # Ciclos de probe MTR por test
   mtr_max_hops: 30                  # Max saltos MTR
   alert_cooldown_seconds: 300       # Tiempo minimo entre alertas duplicadas
   log_level: INFO                   # DEBUG, INFO, WARNING, ERROR
-  data_retention_days: 7            # Dias de retencion de datos historicos
+  data_retention_days: 7            # Dias de retencion de datos
   enable_mikrotik: false            # Deshabilitado - tu gestionas MikroTik
   enable_telegram: false            # Deshabilitado - diagnostico local
 
-providers:
-  - name: Inter
-    asn: 10929
-    gateway: ""                     # Sin source IP - se hace traceroute desde tu PC
-    local_interface: "ether2"
-    vlan_id: "100"
-    test_destinations:
-      - "8.8.8.8"
-      - "1.1.1.1"
-      - "208.67.222.222"
-    baseline:
-      expected_as_path: [10929, 3356, 15169]
-      known_transit_asns: [3356, 174, 1299, 6453, 3257]
-      expected_first_hop_asn: 3356
-      baseline_rtt_avg: 65.0
-    description: "Upstream primario - Inter (AS10929)"
+# Destinos de prueba - la app hace traceroute a cada uno
+# desde tu PC y muestra la ruta AS completa.
+# La app detecta automaticamente por que ASN estas saliendo.
+destinations:
+  - destination: "8.8.8.8"
+    description: "Google DNS"
 
-  - name: Digitel
-    asn: 15135
-    gateway: ""
-    local_interface: "ether3"
-    vlan_id: "200"
-    test_destinations:
-      - "8.8.8.8"
-      - "1.1.1.1"
-      - "208.67.222.222"
-    baseline:
-      expected_as_path: [15135, 1299, 15169]
-      known_transit_asns: [1299, 3356, 174, 2914]
-      expected_first_hop_asn: 1299
-      baseline_rtt_avg: 70.0
-    description: "Upstream secundario - Digitel (AS15135)"
+  - destination: "1.1.1.1"
+    description: "Cloudflare DNS"
 
-  - name: Besser
-    asn: 263220
-    gateway: ""
-    local_interface: "ether4"
-    vlan_id: "300"
-    test_destinations:
-      - "8.8.8.8"
-      - "1.1.1.1"
-      - "208.67.222.222"
-    baseline:
-      expected_as_path: [263220, 174, 15169]
-      known_transit_asns: [174, 3356, 1299, 6453]
-      expected_first_hop_asn: 174
-      baseline_rtt_avg: 80.0
-    description: "Upstream terciario - Besser (AS263220)"
+  - destination: "208.67.222.222"
+    description: "OpenDNS"
+
+# Baselines opcionales - si no se configuran, la app aprende
+# la ruta en la primera ejecucion y la usa como referencia.
+# Descomenta y ajusta segun tus rutas esperadas:
+#
+# baselines:
+#   "8.8.8.8":
+#     expected_as_path: [10929, 3356, 15169]
+#     known_transit_asns: [3356, 174, 1299]
+#     expected_first_hop_asn: 3356
+#     baseline_rtt_avg: 65.0
 
 # Registro de ASN para output legible
 asn_registry:
@@ -87,17 +62,17 @@ asn_registry:
 
 # ASNs sospechosos que deberian trigger alertas
 suspicious_transit_asns:
-  - 6147:   # Telefonica del Peru
-  - 27699:  # Telecom Argentina
-  - 7303:   # Telecom Argentina
-  - 22927:  # Telefonica de Argentina
-  - 11419:  # Telefonica Brazil
-  - 4230:   # CLARO S.A.
-  - 18881:  # TELEFONICA BRASIL
-  - 28573:  # CLARO S.A.
-  - 26617:  # Navega.com S.A.
-  - 27747:  # Telecentro S.A.
-  - 27947:  # Telconet S.A.
-  - 27884:  # COTAS LTDA.
-  - 6424:   # EDGO NETWORKS
-  - 8053:   # IFX Networks
+  - 6147
+  - 27699
+  - 7303
+  - 22927
+  - 11419
+  - 4230
+  - 18881
+  - 28573
+  - 26617
+  - 27747
+  - 27947
+  - 27884
+  - 6424
+  - 8053

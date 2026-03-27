@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class PerformanceCollector:
-    """Collects RTT and packet loss metrics for each provider/destination pair."""
+    """Collects RTT and packet loss metrics for each destination."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -50,7 +50,6 @@ class PerformanceCollector:
             destination=destination,
         )
 
-        # Parse statistics line: rtt min/avg/max/mdev = 1.234/5.678/9.012/0.123 ms
         stats_match = re.search(
             r"rtt min/avg/max/mdev = ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+)", output
         )
@@ -60,12 +59,10 @@ class PerformanceCollector:
             metrics.rtt_max = float(stats_match.group(3))
             metrics.rtt_stddev = float(stats_match.group(4))
 
-        # Parse packet loss: 5% packet loss
         loss_match = re.search(r"(\d+(?:\.\d+)?)% packet loss", output)
         if loss_match:
             metrics.packet_loss = float(loss_match.group(1))
 
-        # Parse transmitted/received
         tx_match = re.search(r"(\d+) packets transmitted, (\d+) received", output)
         if tx_match:
             metrics.packets_sent = int(tx_match.group(1))
@@ -74,15 +71,10 @@ class PerformanceCollector:
         return metrics
 
     def _run_mtr_metrics(
-        self, destination: str, source_ip: str = "", cycles: int = 20
+        self, destination: str, cycles: int = 20
     ) -> PerformanceMetrics | None:
         """Run MTR for detailed hop-by-hop metrics."""
-        cmd = ["mtr", "--json", "--report", "--report-cycles", str(cycles)]
-
-        if source_ip:
-            cmd.extend(["--address", source_ip])
-
-        cmd.append(destination)
+        cmd = ["mtr", "--json", "--report", "--report-cycles", str(cycles), destination]
 
         try:
             result = subprocess.run(
@@ -98,7 +90,6 @@ class PerformanceCollector:
             if not hubs:
                 return None
 
-            # Get destination hop (last hop)
             dest_hop = hubs[-1]
 
             metrics = PerformanceMetrics(
@@ -121,13 +112,11 @@ class PerformanceCollector:
     def measure_provider(
         self, provider_name: str, destination: str, source_ip: str = "",
     ) -> PerformanceMetrics:
-        """Measure performance for a specific provider/destination pair."""
-        # Try MTR first for detailed metrics
-        metrics = self._run_mtr_metrics(destination, source_ip=source_ip)
+        """Measure performance for a destination."""
+        metrics = self._run_mtr_metrics(destination)
 
         if not metrics:
-            # Fallback to ping
-            metrics = self._run_ping(destination, source_ip=source_ip)
+            metrics = self._run_ping(destination)
 
         if not metrics:
             metrics = PerformanceMetrics(
@@ -135,19 +124,14 @@ class PerformanceCollector:
                 destination=destination,
                 packet_loss=100.0,
             )
-            logger.warning(
-                "Both MTR and ping failed for %s via %s",
-                destination,
-                provider_name,
-            )
+            logger.warning("Both MTR and ping failed for %s", destination)
             return metrics
 
         metrics.provider_name = provider_name
         metrics.destination = destination
 
         logger.info(
-            "Performance %s -> %s: RTT=%.1fms, Loss=%.1f%%",
-            provider_name,
+            "Performance %s: RTT=%.1fms, Loss=%.1f%%",
             destination,
             metrics.rtt_avg,
             metrics.packet_loss,
@@ -156,35 +140,14 @@ class PerformanceCollector:
         return metrics
 
     def measure_all(self) -> list[PerformanceMetrics]:
-        """Measure performance for all provider/destination pairs in parallel."""
+        """Measure performance for all configured destinations."""
         metrics_list: list[PerformanceMetrics] = []
 
-        tasks: list[tuple[str, str, str]] = []
-        for provider in self.settings.providers:
-            for dest in provider.test_destinations:
-                tasks.append((provider.name, dest, provider.gateway))
-
-        with ThreadPoolExecutor(max_workers=len(tasks) or 1) as executor:
-            futures = {
-                executor.submit(
-                    self.measure_provider, name, dest, src
-                ): (name, dest)
-                for name, dest, src in tasks
-            }
-
-            for future in as_completed(futures, timeout=300):
-                name, dest = futures[future]
-                try:
-                    result = future.result()
-                    metrics_list.append(result)
-                except Exception as e:
-                    logger.error(
-                        "Measurement failed for %s -> %s: %s", name, dest, e
-                    )
-                    metrics_list.append(PerformanceMetrics(
-                        provider_name=name,
-                        destination=dest,
-                        packet_loss=100.0,
-                    ))
+        for dest_cfg in self.settings.destinations:
+            m = self.measure_provider(
+                provider_name="",
+                destination=dest_cfg.destination,
+            )
+            metrics_list.append(m)
 
         return metrics_list

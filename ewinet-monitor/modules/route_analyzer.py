@@ -38,8 +38,8 @@ class RouteAnalyzer:
     def _ensure_data_dir(self) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _baseline_key(self, provider: str, destination: str) -> str:
-        return f"{provider}:{destination}"
+    def _baseline_key(self, destination: str) -> str:
+        return destination
 
     def _load_baselines(self) -> None:
         """Load saved baselines from disk, or initialize from config."""
@@ -48,10 +48,6 @@ class RouteAnalyzer:
                 with open(BASELINES_FILE, "r") as f:
                     data = json.load(f)
                 for key, bdata in data.items():
-                    as_path = ASN(
-                        number=0,
-                        name="",
-                    )  # placeholder
                     from models.data_models import ASPath
 
                     hops = [
@@ -60,9 +56,9 @@ class RouteAnalyzer:
                     ]
 
                     self._baselines[key] = RouteBaseline(
-                        provider_name=bdata["provider_name"],
-                        provider_asn=bdata["provider_asn"],
-                        gateway=bdata["gateway"],
+                        provider_name=bdata.get("provider_name", ""),
+                        provider_asn=bdata.get("provider_asn", 0),
+                        gateway=bdata.get("gateway", ""),
                         destination=bdata["destination"],
                         expected_as_path=ASPath(hops=hops),
                         expected_intermediate_asns=bdata.get(
@@ -77,21 +73,17 @@ class RouteAnalyzer:
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning("Failed to load baselines: %s, reinitializing", e)
 
-        # Initialize from config
-        for provider in self.settings.providers:
-            key = self._baseline_key(provider.name, provider.baseline.destination)
-            self._baselines[key] = provider.baseline
+        # Initialize from config destinations
+        for dest_cfg in self.settings.destinations:
+            if dest_cfg.baseline:
+                key = self._baseline_key(dest_cfg.destination)
+                self._baselines[key] = dest_cfg.baseline
+            else:
+                # No baseline configured - will learn on first run
+                logger.info("No baseline for %s, will learn on first run", dest_cfg.destination)
 
-            # Also create baselines for each destination
-            for dest in provider.test_destinations:
-                k = self._baseline_key(provider.name, dest)
-                if k != key:
-                    import copy
-                    baseline_copy = copy.deepcopy(provider.baseline)
-                    baseline_copy.destination = dest
-                    self._baselines[k] = baseline_copy
-
-        self._save_baselines()
+        if self._baselines:
+            self._save_baselines()
 
     def _save_baselines(self) -> None:
         """Persist baselines to disk."""
@@ -112,20 +104,19 @@ class RouteAnalyzer:
         with open(BASELINES_FILE, "w") as f:
             json.dump(data, f, indent=2)
 
-    def get_baseline(self, provider: str, destination: str) -> RouteBaseline | None:
-        key = self._baseline_key(provider, destination)
+    def get_baseline(self, destination: str) -> RouteBaseline | None:
+        key = self._baseline_key(destination)
         return self._baselines.get(key)
 
     def update_baseline(self, snapshot: RouteSnapshot) -> None:
         """Update baseline with a confirmed-good route snapshot."""
-        key = self._baseline_key(snapshot.provider_name, snapshot.destination)
+        key = self._baseline_key(snapshot.destination)
         if key in self._baselines:
             baseline = self._baselines[key]
             baseline.expected_as_path = snapshot.as_path
             baseline.expected_intermediate_asns = [
                 asn.number for asn in snapshot.intermediate_asns
             ]
-            # Calculate average RTT from non-lost hops
             valid_rtts = [h.rtt_avg for h in snapshot.hops if h.rtt_avg > 0]
             if valid_rtts:
                 baseline.baseline_rtt_avg = sum(valid_rtts) / len(valid_rtts)
@@ -148,9 +139,9 @@ class RouteAnalyzer:
 
         self._save_baselines()
 
-    def _check_alert_cooldown(self, provider: str, destination: str) -> bool:
+    def _check_alert_cooldown(self, destination: str) -> bool:
         """Check if alert is within cooldown period."""
-        key = self._baseline_key(provider, destination)
+        key = self._baseline_key(destination)
         last_alert = self._alert_cooldowns.get(key, 0)
         cooldown = self.settings.general.alert_cooldown_seconds
         now = time.time()
@@ -162,12 +153,11 @@ class RouteAnalyzer:
     def analyze_route(self, snapshot: RouteSnapshot) -> list[RouteAnomaly]:
         """Compare a route snapshot against its baseline. Returns list of anomalies."""
         anomalies: list[RouteAnomaly] = []
-        baseline = self.get_baseline(snapshot.provider_name, snapshot.destination)
+        baseline = self.get_baseline(snapshot.destination)
 
         if not baseline:
             logger.warning(
-                "No baseline for %s -> %s, learning current route",
-                snapshot.provider_name,
+                "No baseline for %s, learning current route",
                 snapshot.destination,
             )
             self.update_baseline(snapshot)
@@ -178,19 +168,15 @@ class RouteAnalyzer:
                 provider_name=snapshot.provider_name,
                 destination=snapshot.destination,
                 severity=AlertSeverity.CRITICAL,
-                description=f"No route to {snapshot.destination} via {snapshot.provider_name}. "
+                description=f"No route to {snapshot.destination}. "
                 "The link may be down or routes are not being received.",
                 baseline_as_path=str(baseline.expected_as_path),
                 current_as_path="NO ROUTE",
             ))
             return anomalies
 
-        if not self._check_alert_cooldown(snapshot.provider_name, snapshot.destination):
-            logger.debug(
-                "Alert cooldown active for %s -> %s",
-                snapshot.provider_name,
-                snapshot.destination,
-            )
+        if not self._check_alert_cooldown(snapshot.destination):
+            logger.debug("Alert cooldown active for %s", snapshot.destination)
             return anomalies
 
         current_asns = snapshot.as_path.unique_asns()
@@ -206,16 +192,13 @@ class RouteAnalyzer:
                 and asn.number != baseline.provider_asn
                 and asn.number != 0
             ):
-                # Check if it's a known transit
                 if asn.number not in known_transit:
                     unexpected.append(asn)
-                # Also check if it's in the suspicious list
                 elif asn.number in self.settings.suspicious_transit_asns:
                     unexpected.append(asn)
 
         if unexpected:
             severity = AlertSeverity.CRITICAL
-            # Check if any suspicious ASN is present
             if any(a.number in self.settings.suspicious_transit_asns for a in unexpected):
                 severity = AlertSeverity.CRITICAL
             else:
@@ -319,9 +302,8 @@ class RouteAnalyzer:
 
         if anomalies:
             logger.warning(
-                "Detected %d anomalies for %s -> %s",
+                "Detected %d anomalies for %s",
                 len(anomalies),
-                snapshot.provider_name,
                 snapshot.destination,
             )
 
@@ -338,8 +320,6 @@ class RouteAnalyzer:
             "as_path_numbers": snapshot.as_path.as_numbers(),
             "hop_count": len(snapshot.hops),
             "status": snapshot.status.value,
-            "interface": snapshot.physical_interface,
-            "vlan": snapshot.vlan_id,
             "hops": [
                 {
                     "hop": h.hop_number,
@@ -365,10 +345,8 @@ class RouteAnalyzer:
             anomalies = self.analyze_route(snapshot)
             all_anomalies.extend(anomalies)
 
-            # Save to history
             self.save_history(snapshot)
 
-            # Update baseline if route is normal
             if not anomalies and snapshot.status == RouteStatus.NORMAL:
                 self.update_baseline(snapshot)
 

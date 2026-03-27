@@ -11,16 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
-
 from config.settings import Settings
-from models.data_models import (
-    AlertSeverity,
-    PerformanceMetrics,
-    RouteAnomaly,
-    RouteSnapshot,
-    RouteStatus,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +28,19 @@ _state: dict[str, Any] = {
     "last_update": 0,
     "cycle_count": 0,
     "status": "starting",
+    "public_ip": "",
 }
 
 
-def create_app(settings: Settings) -> Flask:
+def create_app(settings: Settings) -> Any:
     """Create and configure the Flask app."""
+    from flask import Flask, jsonify, render_template, request
+    from models.data_models import (
+        PerformanceMetrics,
+        RouteAnomaly,
+        RouteSnapshot,
+    )
+
     template_dir = Path(__file__).parent / "templates"
     static_dir = Path(__file__).parent / "static"
 
@@ -65,7 +64,8 @@ def create_app(settings: Settings) -> Flask:
                 _state["last_update"]
             ).strftime("%Y-%m-%d %H:%M:%S") if _state["last_update"] else "Never",
             "uptime": time.time() - _state.get("start_time", time.time()),
-            "providers_count": len(settings.providers),
+            "destinations_count": len(settings.destinations),
+            "public_ip": _state.get("public_ip", ""),
         })
 
     @app.route("/api/snapshots")
@@ -132,31 +132,20 @@ def create_app(settings: Settings) -> Flask:
                 result.append(a)
         return jsonify(result)
 
-    @app.route("/api/providers")
-    def api_providers() -> Any:
-        providers = []
-        for p in settings.providers:
-            providers.append({
-                "name": p.name,
-                "asn": p.asn,
-                "gateway": p.gateway,
-                "interface": p.local_interface,
-                "vlan_id": p.vlan_id,
-                "destinations": p.test_destinations,
-                "description": p.description,
-                "baseline": {
-                    "expected_as_path": p.baseline.expected_as_path.as_numbers(),
-                    "expected_as_path_str": str(p.baseline.expected_as_path),
-                    "known_transit_asns": p.baseline.known_transit_asns,
-                    "expected_first_hop_asn": p.baseline.expected_first_hop_asn,
-                    "baseline_rtt_avg": p.baseline.baseline_rtt_avg,
-                },
+    @app.route("/api/destinations")
+    def api_destinations() -> Any:
+        dests = []
+        for d in settings.destinations:
+            dests.append({
+                "destination": d.destination,
+                "description": d.description,
+                "expected_provider": d.expected_provider,
+                "expected_asn": d.expected_asn,
             })
-        return jsonify(providers)
+        return jsonify(dests)
 
     @app.route("/api/history")
     def api_history() -> Any:
-        """Read recent history from the JSONL file."""
         limit = request.args.get("limit", 50, type=int)
         records: list[dict[str, Any]] = []
 
@@ -197,7 +186,7 @@ def create_app(settings: Settings) -> Flask:
     return app
 
 
-def _snapshot_to_dict(s: RouteSnapshot) -> dict[str, Any]:
+def _snapshot_to_dict(s: Any) -> dict[str, Any]:
     return {
         "provider_name": s.provider_name,
         "provider_asn": s.provider_asn,
@@ -233,11 +222,12 @@ def _snapshot_to_dict(s: RouteSnapshot) -> dict[str, Any]:
 
 
 def update_state(
-    snapshots: list[RouteSnapshot] | None = None,
-    anomalies: list[RouteAnomaly] | None = None,
-    performance: list[PerformanceMetrics] | None = None,
+    snapshots: list[Any] | None = None,
+    anomalies: list[Any] | None = None,
+    performance: list[Any] | None = None,
     cycle_count: int | None = None,
     status: str | None = None,
+    public_ip: str | None = None,
 ) -> None:
     """Update shared state from the monitor thread."""
     if snapshots is not None:
@@ -250,14 +240,15 @@ def update_state(
         _state["cycle_count"] = cycle_count
     if status is not None:
         _state["status"] = status
+    if public_ip is not None:
+        _state["public_ip"] = public_ip
     _state["last_update"] = time.time()
 
-    # Persist alerts
     if anomalies:
         _save_alerts(anomalies)
 
 
-def _save_alerts(anomalies: list[RouteAnomaly]) -> None:
+def _save_alerts(anomalies: list[Any]) -> None:
     """Append anomalies to alerts history file."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -284,7 +275,6 @@ def _save_alerts(anomalies: list[RouteAnomaly]) -> None:
             "latency_increase_percent": a.latency_increase_percent,
         })
 
-    # Keep last 500 alerts
     existing = existing[-500:]
 
     with open(ALERTS_FILE, "w") as f:
