@@ -1,0 +1,33 @@
+# Ewinet Route Monitor - .gitignore
+
+# Environment secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# Logs
+logs/
+*.log
+
+# Data files (generated)
+data/baselines.json
+data/route_history.jsonl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

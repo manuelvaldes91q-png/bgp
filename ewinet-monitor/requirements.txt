@@ -1,0 +1,8 @@
+# Core dependencies
+pyyaml>=6.0,<7.0
+
+# MikroTik API (optional - only needed if using API mode)
+# routeros-api>=1.0.4
+
+# Optional: Enhanced ASN lookup
+# ipwhois>=2.0.0
