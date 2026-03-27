@@ -41,8 +41,9 @@ def create_app(settings: Settings) -> Any:
         RouteSnapshot,
     )
 
-    template_dir = Path(__file__).parent / "templates"
-    static_dir = Path(__file__).parent / "static"
+    project_root = Path(__file__).parent.parent
+    template_dir = project_root / "web" / "templates"
+    static_dir = project_root / "web" / "static"
 
     app = Flask(
         __name__,
