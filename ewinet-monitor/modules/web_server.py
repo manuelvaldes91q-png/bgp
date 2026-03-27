@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import Settings
+from modules.speedtest import SpeedtestRunner
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,9 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 HISTORY_FILE = DATA_DIR / "route_history.jsonl"
 BASELINES_FILE = DATA_DIR / "baselines.json"
 ALERTS_FILE = DATA_DIR / "alerts.json"
+
+# Shared speedtest instance
+_speedtest = SpeedtestRunner()
 
 # Shared state updated by the monitor
 _state: dict[str, Any] = {
@@ -209,24 +213,20 @@ def create_app(settings: Settings) -> Any:
 
     # ── Speedtest Endpoints ──
 
-    from modules.speedtest import SpeedtestRunner
-
-    speedtest_runner = SpeedtestRunner()
-
     @app.route("/api/speedtest/status")
     def api_speedtest_status() -> Any:
-        available, version = speedtest_runner.check_available()
-        last = speedtest_runner.last_result
+        available, version = _speedtest.check_available()
+        last = _speedtest.last_result
         return jsonify({
             "available": available,
             "version": version,
-            "running": speedtest_runner.is_running,
-            "last_result": speedtest_runner.to_dict(last) if last else None,
+            "running": _speedtest.is_running,
+            "last_result": _speedtest.to_dict(last) if last else None,
         })
 
     @app.route("/api/speedtest/servers")
     def api_speedtest_servers() -> Any:
-        servers = speedtest_runner.list_servers()
+        servers = _speedtest.list_servers()
         return jsonify([
             {
                 "server_id": s.server_id,
@@ -242,26 +242,26 @@ def create_app(settings: Settings) -> Any:
 
     @app.route("/api/speedtest/run", methods=["POST"])
     def api_speedtest_run() -> Any:
-        if speedtest_runner.is_running:
-            return jsonify({"error": "A speedtest is already running"}), 409
+        if _speedtest.is_running:
+            return jsonify({"error": "Ya hay un test en ejecucion"}), 409
 
         data = request.get_json(silent=True) or {}
         server_id = str(data.get("server_id", ""))
 
-        speedtest_runner.run_test_async(server_id)
+        _speedtest.run_test_async(server_id)
         return jsonify({"status": "started", "server_id": server_id or "auto"})
 
     @app.route("/api/speedtest/result")
     def api_speedtest_result() -> Any:
-        last = speedtest_runner.last_result
+        last = _speedtest.last_result
         if not last:
-            return jsonify({"error": "No results yet"}), 404
-        return jsonify(speedtest_runner.to_dict(last))
+            return jsonify({"error": "Sin resultados"}), 404
+        return jsonify(_speedtest.to_dict(last))
 
     @app.route("/api/speedtest/history")
     def api_speedtest_history() -> Any:
-        history = speedtest_runner.history
-        return jsonify([speedtest_runner.to_dict(r) for r in history])
+        history = _speedtest.history
+        return jsonify([_speedtest.to_dict(r) for r in history])
 
     return app
 
