@@ -622,6 +622,191 @@ body {
 
 .bgp-asn-input { margin-bottom: 16px; }
 
+/* BGP Topology */
+.topology-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 24px;
+    overflow-x: auto;
+}
+
+.bgp-source {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.topo-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 700px;
+}
+
+.topo-tier {
+    width: 100%;
+    text-align: center;
+}
+
+.topo-tier-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    font-family: var(--font-mono);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.topo-nodes {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: nowrap;
+}
+
+.topo-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    min-width: 140px;
+    transition: all 0.2s;
+}
+
+.topo-node:hover {
+    border-color: var(--accent-blue);
+    box-shadow: var(--shadow-glow-blue);
+}
+
+.tier1-node {
+    border-color: var(--accent-purple);
+    background: var(--accent-purple-dim);
+}
+
+.vz-node {
+    border-color: var(--accent-yellow);
+    background: var(--accent-yellow-dim);
+}
+
+.ewinet-node {
+    border-color: var(--accent-cyan);
+    background: rgba(6,182,212,0.1);
+    min-width: 280px;
+    padding: 16px 24px;
+}
+
+.topo-asn {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+}
+
+.topo-asn-main {
+    font-size: 18px;
+    color: var(--accent-green);
+}
+
+.topo-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.topo-name-main {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.topo-country {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 2px;
+}
+
+.topo-transit {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 4px;
+}
+
+.topo-prefixes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+    justify-content: center;
+}
+
+.topo-prefix {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--accent-green);
+    background: rgba(16,185,129,0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.topo-stats {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.topo-stat {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+}
+
+.topo-stat-valid {
+    color: var(--accent-green);
+    background: rgba(16,185,129,0.1);
+}
+
+.topo-connections {
+    display: flex;
+    justify-content: center;
+    gap: 80px;
+    padding: 4px 0;
+}
+
+.topo-conn-line {
+    width: 2px;
+    height: 20px;
+    background: linear-gradient(to bottom, var(--border-color), var(--accent-blue), var(--border-color));
+    position: relative;
+}
+
+.topo-conn-line::after {
+    content: '';
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--accent-blue);
+}
+
 .bgp-overview {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

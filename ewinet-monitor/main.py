@@ -84,6 +84,124 @@ class EwinetMonitor:
             self._public_ip = detect_public_ip()
         return self._public_ip
 
+    def _print_bgp_topology(self) -> None:
+        """Print BGP topology for known ASN (Ewinet)."""
+        # Known ASN relationships from HE.net
+        topology = {
+            52285: {
+                "name": "Ewinet C.A.",
+                "country": "VE",
+                "prefixes": [
+                    "190.111.120.0/24",
+                    "190.111.121.0/24",
+                    "190.111.122.0/24",
+                    "190.111.123.0/24",
+                ],
+                "peers": [
+                    {"asn": 27717, "name": "Corporacion Digitel C.A.", "role": "upstream"},
+                    {"asn": 21826, "name": "Corporacion Telemic C.A.", "role": "upstream"},
+                    {"asn": 272102, "name": "BESSER SOLUTIONS C.A.", "role": "upstream"},
+                ],
+            },
+            27717: {
+                "name": "Corporacion Digitel C.A.",
+                "country": "VE",
+                "role": "ISP Venezuela",
+                "transits": [3356, 1299],
+            },
+            21826: {
+                "name": "Corporacion Telemic C.A.",
+                "country": "VE",
+                "role": "ISP Venezuela",
+                "transits": [3356, 1299, 2914],
+            },
+            272102: {
+                "name": "BESSER SOLUTIONS C.A.",
+                "country": "VE",
+                "role": "ISP Venezuela",
+                "transits": [174, 3356],
+            },
+            3356: {"name": "Level3/Lumen", "country": "US", "role": "Tier-1 Transit"},
+            1299: {"name": "Arelion/Telia", "country": "SE", "role": "Tier-1 Transit"},
+            174: {"name": "Cogent", "country": "US", "role": "Tier-1 Transit"},
+            2914: {"name": "NTT", "country": "JP", "role": "Tier-1 Transit"},
+            15169: {"name": "Google", "country": "US", "role": "Content"},
+            13335: {"name": "Cloudflare", "country": "US", "role": "Content"},
+            6939: {"name": "Hurricane Electric", "country": "US", "role": "Tier-1 Transit"},
+        }
+
+        print(f"\n{'=' * 70}")
+        print(f"  TOPOLOGIA BGP - EWIMET (AS52285)")
+        print(f"  Fuente: bgp.he.net/AS52285")
+        print(f"{'=' * 70}")
+
+        ewinet = topology[52285]
+        print(f"\n  AS52285 - {ewinet['name']} ({ewinet['country']})")
+        print(f"  Prefixes originados: {len(ewinet['prefixes'])}")
+        for p in ewinet['prefixes']:
+            print(f"    {C_GREEN}{p}{C_RESET}")
+
+        print(f"\n  Peers BGP: {len(ewinet['peers'])}")
+        print()
+
+        # ASCII topology graph
+        print(f"                          ┌─────────────────────┐")
+        print(f"                          │  {C_BOLD}INTERNET{C_RESET}          │")
+        print(f"                          │  Tier-1 Transit     │")
+        print(f"                          └──┬──────┬──────┬────┘")
+        print(f"                             │      │      │")
+
+        # Tier-1 providers
+        tier1_asns = [3356, 1299, 174]
+        tier1_names = []
+        for asn in tier1_asns:
+            info = topology.get(asn, {})
+            name = info.get("name", f"AS{asn}")
+            tier1_names.append(f"AS{asn}")
+
+        print(f"                    {C_GREEN}AS3356{C_RESET}  {C_GREEN}AS1299{C_RESET}  {C_GREEN}AS174{C_RESET}")
+        print(f"                    {C_GREEN}Lumen{C_RESET}   {C_GREEN}Telia{C_RESET}   {C_GREEN}Cogent{C_RESET}")
+        print(f"                         │      │      │")
+        print(f"                         ▼      ▼      ▼")
+
+        # Venezuelan providers
+        print(f"              ┌──────────────────────────────────┐")
+        print(f"              │    {C_YELLOW}PROVEEDORES VENEZUELA{C_RESET}         │")
+        print(f"              ├────────┬──────────┬──────────────┤")
+        print(f"              │AS27717 │ AS21826  │  AS272102    │")
+        print(f"              │Digitel │ Telemic  │  Besser      │")
+        print(f"              └───┬────┴────┬─────┴──────┬───────┘")
+        print(f"                  │         │            │")
+        print(f"                  └────┬────┴────────────┘")
+        print(f"                       │")
+        print(f"                       ▼")
+        print(f"              ┌─────────────────────────┐")
+        print(f"              │  {C_BOLD}{C_CYAN}AS52285 - EWIMET C.A.{C_RESET}   │")
+        print(f"              │  190.111.120.0/22       │")
+        print(f"              │  Peers: 3               │")
+        print(f"              │  Prefixes: 4            │")
+        print(f"              │  RPKI: Valid            │")
+        print(f"              └─────────────────────────┘")
+
+        print(f"\n  Relaciones BGP:")
+        for peer in ewinet['peers']:
+            peer_info = topology.get(peer['asn'], {})
+            transit_names = []
+            for t in peer_info.get('transits', []):
+                t_info = topology.get(t, {})
+                transit_names.append(f"AS{t} ({t_info.get('name', '')})")
+            transit_str = " -> " + ", ".join(transit_names) if transit_names else ""
+            print(f"    AS52285 ──> AS{peer['asn']} ({peer['name']}){transit_str}")
+
+        print(f"\n  Rutas posibles desde AS52285:")
+        for peer in ewinet['peers']:
+            peer_info = topology.get(peer['asn'], {})
+            for t in peer_info.get('transits', []):
+                t_info = topology.get(t, {})
+                print(f"    {C_GREEN}AS52285 -> AS{peer['asn']} -> AS{t} ({t_info.get('name', '')}) -> INTERNET{C_RESET}")
+
+        print()
+
     def run_single_cycle(self) -> None:
         """Execute a single monitoring cycle."""
         self._cycle_count += 1
@@ -191,6 +309,9 @@ class EwinetMonitor:
         else:
             print("  No se pudo detectar IP publica (sin internet?)")
             print("  Continuando de todos modos...")
+
+        # Show BGP topology for known ASN
+        self._print_bgp_topology()
 
         # Step 2: Probe routes
         print(f"\n[2/4] Probando rutas a {len(self.settings.destinations)} destinos...")

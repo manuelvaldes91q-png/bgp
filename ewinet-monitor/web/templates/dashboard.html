@@ -123,6 +123,101 @@
             </div>
         </section>
 
+        <!-- BGP Topology Graph -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    Topologia BGP - Ewinet AS52285
+                </h2>
+                <span class="bgp-source">Fuente: bgp.he.net</span>
+            </div>
+            <div class="topology-panel">
+                <div class="topo-graph">
+                    <!-- Tier-1 -->
+                    <div class="topo-tier topo-tier1">
+                        <div class="topo-tier-label">INTERNET - Tier-1 Transit</div>
+                        <div class="topo-nodes">
+                            <div class="topo-node tier1-node">
+                                <span class="topo-asn">AS3356</span>
+                                <span class="topo-name">Level3/Lumen</span>
+                                <span class="topo-country">US</span>
+                            </div>
+                            <div class="topo-node tier1-node">
+                                <span class="topo-asn">AS1299</span>
+                                <span class="topo-name">Arelion/Telia</span>
+                                <span class="topo-country">SE</span>
+                            </div>
+                            <div class="topo-node tier1-node">
+                                <span class="topo-asn">AS174</span>
+                                <span class="topo-name">Cogent</span>
+                                <span class="topo-country">US</span>
+                            </div>
+                            <div class="topo-node tier1-node">
+                                <span class="topo-asn">AS2914</span>
+                                <span class="topo-name">NTT</span>
+                                <span class="topo-country">JP</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Connection lines -->
+                    <div class="topo-connections">
+                        <div class="topo-conn-line"></div>
+                        <div class="topo-conn-line"></div>
+                        <div class="topo-conn-line"></div>
+                        <div class="topo-conn-line"></div>
+                    </div>
+                    <!-- Venezuelan Providers -->
+                    <div class="topo-tier topo-tier2">
+                        <div class="topo-tier-label">PROVEEDORES VENEZUELA</div>
+                        <div class="topo-nodes">
+                            <div class="topo-node vz-node">
+                                <span class="topo-asn">AS27717</span>
+                                <span class="topo-name">Digitel</span>
+                                <span class="topo-transit">via AS3356, AS1299</span>
+                            </div>
+                            <div class="topo-node vz-node">
+                                <span class="topo-asn">AS21826</span>
+                                <span class="topo-name">Telemic</span>
+                                <span class="topo-transit">via AS3356, AS1299, AS2914</span>
+                            </div>
+                            <div class="topo-node vz-node">
+                                <span class="topo-asn">AS272102</span>
+                                <span class="topo-name">Besser</span>
+                                <span class="topo-transit">via AS174, AS3356</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Connection to Ewinet -->
+                    <div class="topo-connections">
+                        <div class="topo-conn-line"></div>
+                        <div class="topo-conn-line"></div>
+                        <div class="topo-conn-line"></div>
+                    </div>
+                    <!-- Ewinet -->
+                    <div class="topo-tier topo-tier3">
+                        <div class="topo-nodes">
+                            <div class="topo-node ewinet-node">
+                                <span class="topo-asn topo-asn-main">AS52285</span>
+                                <span class="topo-name topo-name-main">Ewinet C.A.</span>
+                                <div class="topo-prefixes">
+                                    <span class="topo-prefix">190.111.120.0/24</span>
+                                    <span class="topo-prefix">190.111.121.0/24</span>
+                                    <span class="topo-prefix">190.111.122.0/24</span>
+                                    <span class="topo-prefix">190.111.123.0/24</span>
+                                </div>
+                                <div class="topo-stats">
+                                    <span class="topo-stat">4 Prefixes</span>
+                                    <span class="topo-stat">3 Peers</span>
+                                    <span class="topo-stat topo-stat-valid">RPKI Valid</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- BGP Info Panel -->
         <section class="section">
             <div class="section-header">
