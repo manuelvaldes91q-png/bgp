@@ -5,8 +5,8 @@
 
 general:
   poll_interval_seconds: 120        # Intervalo entre ciclos (modo daemon)
-  mtr_cycles: 10                    # Ciclos de probe MTR por test
-  mtr_max_hops: 30                  # Max saltos MTR
+  mtr_cycles: 5                     # Ciclos probe (5=rapido, 10=preciso)
+  mtr_max_hops: 20                  # Max saltos (20=rapido, 30=completo)
   alert_cooldown_seconds: 300       # Tiempo minimo entre alertas duplicadas
   log_level: INFO                   # DEBUG, INFO, WARNING, ERROR
   data_retention_days: 7            # Dias de retencion de datos

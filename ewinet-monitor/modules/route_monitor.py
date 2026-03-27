@@ -9,19 +9,33 @@ import socket
 import subprocess
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional
+from typing import Any
 
 from config.settings import Settings
 from models.data_models import ASN, ASPath, RouteHop, RouteSnapshot, RouteStatus
 
 logger = logging.getLogger(__name__)
 
+# International transit ASNs (outside Venezuela)
+INTERNATIONAL_TRANSIT_ASNS = {
+    3356, 1299, 174, 6453, 3257, 2914, 6939, 1273, 9002, 3491,
+    5511, 6762, 7018, 3320, 286, 3216, 12956, 4230, 15169, 13335,
+    20940, 8075, 16509, 32934, 20473, 14061, 54113, 7922, 22773,
+    701, 209, 396982, 19527, 8068, 16265, 49544, 24940, 15133,
+    3209, 2119, 2603, 13030, 3333, 5408, 6830,
+}
+
+# Venezuelan ASNs
+VENEZUELAN_ASNS = {
+    10929, 15135, 263220, 269693, 264628, 271910, 263702,
+    271886, 267798, 271949, 27984, 273087, 272058, 264681, 272800, 266793,
+}
+
 # Public IP detection services
 IP_DETECT_SERVICES = [
     "https://api.ipify.org",
     "https://ifconfig.me/ip",
     "https://icanhazip.com",
-    "https://checkip.amazonaws.com",
 ]
 
 
@@ -30,7 +44,7 @@ def detect_public_ip() -> str:
     for service in IP_DETECT_SERVICES:
         try:
             req = urllib.request.Request(service, headers={"User-Agent": "ewinet-monitor/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 ip = response.read().decode("utf-8").strip()
                 socket.inet_aton(ip)
                 return ip
@@ -46,7 +60,7 @@ def lookup_asn_hackertarget(ip: str) -> dict[str, str] | None:
     try:
         url = f"https://api.hackertarget.com/aslookup/?q={ip}&output=json"
         req = urllib.request.Request(url, headers={"User-Agent": "ewinet-monitor/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=6) as response:
             data = json.loads(response.read().decode("utf-8"))
             if "asn" in data:
                 return {
@@ -59,13 +73,49 @@ def lookup_asn_hackertarget(ip: str) -> dict[str, str] | None:
     return None
 
 
+def lookup_asn_batch_cymru(ips: list[str]) -> dict[str, tuple[int, str]]:
+    """Batch ASN lookup via whois.cymru.com (much faster than individual queries)."""
+    results: dict[str, tuple[int, str]] = {}
+    if not ips:
+        return results
+
+    # Filter private IPs
+    public_ips = [ip for ip in ips if not (
+        ip == "*" or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172.16.")
+    )]
+    if not public_ips:
+        return results
+
+    try:
+        query = "\n".join(public_ips)
+        result = subprocess.run(
+            ["whois", "-h", "whois.cymru.com", f" -v {query}"],
+            capture_output=True, text=True, timeout=30,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if "|" in line and "BGP" not in line and "AS" not in line[:3]:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) >= 3:
+                    try:
+                        asn_num = int(parts[0].strip())
+                        ip = parts[1].strip()
+                        asn_name = parts[2].strip()
+                        results[ip] = (asn_num, asn_name)
+                    except ValueError:
+                        continue
+    except Exception:
+        pass
+
+    return results
+
+
 def lookup_bgp_routes(asn: int) -> list[str]:
     """Lookup BGP prefixes for an ASN via whois.radb.net."""
     prefixes: list[str] = []
     try:
         result = subprocess.run(
             ["whois", "-h", "whois.radb.net", f"-i origin AS{asn}"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, text=True, timeout=10,
         )
         for line in result.stdout.split("\n"):
             line = line.strip()
@@ -78,26 +128,14 @@ def lookup_bgp_routes(asn: int) -> list[str]:
     return prefixes[:10]
 
 
-def resolve_hostname(ip: str) -> str:
-    """Reverse DNS lookup with timeout."""
-    try:
-        hostname, _, _ = socket.gethostbyaddr(ip)
-        return hostname
-    except (socket.herror, socket.gaierror, OSError):
-        return ""
-
-
-def infer_asn_from_hostname(hostname: str) -> tuple[int, str]:
-    """Try to extract ASN information from hostname patterns."""
-    patterns = [
-        r"as(\d+)",
-        r"^(\d{5,6})\.",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, hostname, re.IGNORECASE)
-        if match:
-            return int(match.group(1)), hostname
-    return 0, ""
+def is_international_hop(asn_number: int) -> bool:
+    """Check if ASN is an international transit (not Venezuelan)."""
+    if asn_number in VENEZUELAN_ASNS:
+        return False
+    if asn_number in INTERNATIONAL_TRANSIT_ASNS:
+        return True
+    # Heuristic: if not in our known lists, check if it's a well-known transit
+    return asn_number > 1000 and asn_number not in VENEZUELAN_ASNS
 
 
 class RouteMonitor:
@@ -106,10 +144,10 @@ class RouteMonitor:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._asn_name_cache: dict[int, str] = {}
+        self._asn_ip_cache: dict[str, ASN] = {}
 
-    def run_mtr_json(self, destination: str, source_ip: str = "",
-                     cycles: int = 10, max_hops: int = 30) -> dict[str, Any] | None:
-        """Execute MTR in JSON mode and return parsed output."""
+    def run_mtr_json(self, destination: str, cycles: int = 5, max_hops: int = 20) -> dict[str, Any] | None:
+        """Execute MTR in JSON mode - fast mode with fewer cycles."""
         cmd = [
             "mtr", "--json",
             "--report",
@@ -118,58 +156,16 @@ class RouteMonitor:
             "--no-dns",
             destination,
         ]
-        if source_ip:
-            cmd.insert(4, "--address")
-            cmd.insert(5, source_ip)
 
         try:
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
+                cmd, capture_output=True, text=True, timeout=60,
             )
             if result.returncode != 0:
-                logger.error("MTR failed for %s: %s", destination, result.stderr)
                 return None
             return json.loads(result.stdout)
-        except subprocess.TimeoutExpired:
-            logger.error("MTR timed out for %s", destination)
+        except Exception:
             return None
-        except json.JSONDecodeError:
-            logger.error("Failed to parse MTR JSON for %s", destination)
-            return None
-        except FileNotFoundError:
-            logger.error("mtr not found. Install with: apt install mtr-tiny")
-            return None
-
-    def run_traceroute_asn(self, destination: str, source_ip: str = "",
-                           max_hops: int = 30) -> list[RouteHop]:
-        """Execute traceroute with ASN info via whois lookups."""
-        cmd = ["traceroute", "-n", "-m", str(max_hops), "-w", "2", destination]
-        if source_ip:
-            cmd.extend(["-s", source_ip])
-
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=180,
-            )
-            if result.returncode != 0:
-                logger.error("Traceroute failed: %s", result.stderr)
-                return []
-
-            hops: list[RouteHop] = []
-            for line in result.stdout.strip().split("\n")[1:]:
-                hop = self._parse_traceroute_line(line)
-                if hop:
-                    hops.append(hop)
-            return hops
-        except subprocess.TimeoutExpired:
-            logger.error("Traceroute timed out for %s", destination)
-            return []
-        except FileNotFoundError:
-            logger.error("traceroute not found. Install with: apt install traceroute")
-            return []
 
     def _parse_traceroute_line(self, line: str) -> RouteHop | None:
         """Parse a single traceroute output line."""
@@ -187,149 +183,86 @@ class RouteMonitor:
                 )
             return None
 
-        hop_num = int(match.group(1))
-        ip = match.group(2)
-        rtt_min = float(match.group(3))
-        rtt_avg = float(match.group(4))
-        rtt_max = float(match.group(5))
-
         return RouteHop(
-            hop_number=hop_num,
-            ip_address=ip,
-            rtt_min=rtt_min,
-            rtt_avg=rtt_avg,
-            rtt_max=rtt_max,
+            hop_number=int(match.group(1)),
+            ip_address=match.group(2),
+            rtt_min=float(match.group(3)),
+            rtt_avg=float(match.group(4)),
+            rtt_max=float(match.group(5)),
         )
 
-    def _resolve_asn_name(self, asn_number: int) -> str:
-        """Resolve ASN name from cache, config, hackertarget, or whois."""
-        if asn_number in self._asn_name_cache:
-            return self._asn_name_cache[asn_number]
-
-        # Try config registry first
-        name = self.settings.asn_registry.get(asn_number, "")
-        if name:
-            self._asn_name_cache[asn_number] = name
-            return name
-
-        # Try hackertarget API
-        try:
-            url = f"https://api.hackertarget.com/aslookup/?q=AS{asn_number}&output=json"
-            req = urllib.request.Request(url, headers={"User-Agent": "ewinet-monitor/1.0"})
-            with urllib.request.urlopen(req, timeout=8) as response:
-                data = json.loads(response.read().decode("utf-8"))
-                if "asn_name" in data:
-                    name = data["asn_name"]
-                    self._asn_name_cache[asn_number] = name
-                    return name
-        except Exception:
-            pass
-
-        # Fallback to whois
-        try:
-            result = subprocess.run(
-                ["whois", f"AS{asn_number}"],
-                capture_output=True, text=True, timeout=10,
-            )
-            for line in result.stdout.split("\n"):
-                if line.lower().startswith("as-name:") or line.lower().startswith("aut-num:"):
-                    name = line.split(":", 1)[1].strip()
-                    if name:
-                        self._asn_name_cache[asn_number] = name
-                        return name
-                if "netname:" in line.lower():
-                    name = line.split(":", 1)[1].strip()
-                    if name:
-                        self._asn_name_cache[asn_number] = name
-                        return name
-        except Exception:
-            pass
-
-        self._asn_name_cache[asn_number] = ""
-        return ""
-
-    def _lookup_asn(self, ip: str) -> ASN | None:
-        """Lookup ASN for an IP using whois + hackertarget."""
+    def _lookup_asn_for_ip(self, ip: str) -> ASN | None:
+        """Lookup ASN for a single IP - hackertarget first, then cymru, then whois."""
         if ip == "*" or ip.startswith("10.") or ip.startswith("192.168.") or ip.startswith("172.16."):
             return None
 
-        # Try hackertarget first (faster, more reliable names)
-        ht_result = lookup_asn_hackertarget(ip)
-        if ht_result:
+        # Check cache
+        if ip in self._asn_ip_cache:
+            return self._asn_ip_cache[ip]
+
+        # Try hackertarget first (fastest, best names)
+        ht = lookup_asn_hackertarget(ip)
+        if ht:
             try:
-                asn_num = int(ht_result["asn"])
-                asn_name = ht_result["name"]
-                return ASN(number=asn_num, name=asn_name)
+                asn_num = int(ht["asn"])
+                asn_name = ht["name"]
+                asn = ASN(number=asn_num, name=asn_name)
+                self._asn_ip_cache[ip] = asn
+                self._asn_name_cache[asn_num] = asn_name
+                return asn
             except (ValueError, KeyError):
                 pass
 
-        # Fallback to whois.cymru.com
+        # Fallback to whois.cymru
         try:
             result = subprocess.run(
                 ["whois", "-h", "whois.cymru.com", f" -v {ip}"],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True, text=True, timeout=8,
             )
-            if result.returncode != 0:
-                return self._lookup_asn_radb(ip)
-
-            lines = result.stdout.strip().split("\n")
-            for line in lines:
-                if "BGP" in line or "|" in line:
+            for line in result.stdout.strip().split("\n"):
+                if "|" in line and "BGP" not in line:
                     parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 3:
                         try:
                             asn_num = int(parts[0].strip())
-                            asn_name = parts[2].strip() if len(parts) > 2 else ""
-                            return ASN(number=asn_num, name=asn_name)
+                            asn_name = parts[2].strip()
+                            asn = ASN(number=asn_num, name=asn_name)
+                            self._asn_ip_cache[ip] = asn
+                            self._asn_name_cache[asn_num] = asn_name
+                            return asn
                         except ValueError:
                             continue
-
-            return self._lookup_asn_radb(ip)
-
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return self._lookup_asn_radb(ip)
-
-    def _lookup_asn_radb(self, ip: str) -> ASN | None:
-        """Fallback ASN lookup using RADB whois."""
-        try:
-            result = subprocess.run(
-                ["whois", "-h", "whois.radb.net", f"origin {ip}"],
-                capture_output=True, text=True, timeout=15,
-            )
-            for line in result.stdout.split("\n"):
-                if line.startswith("origin:"):
-                    match = re.search(r"AS(\d+)", line, re.IGNORECASE)
-                    if match:
-                        return ASN(number=int(match.group(1)))
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except Exception:
             pass
+
         return None
 
     def enrich_hops_with_asn(self, hops: list[RouteHop]) -> list[RouteHop]:
-        """Add ASN info to each hop using whois lookups."""
+        """Add ASN info to each hop using parallel lookups."""
         ip_to_hop: dict[str, RouteHop] = {}
         for hop in hops:
             if hop.ip_address != "*" and hop.ip_address not in ip_to_hop:
                 ip_to_hop[hop.ip_address] = hop
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # Parallel ASN lookups
+        with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {
-                executor.submit(self._lookup_asn, ip): ip
+                executor.submit(self._lookup_asn_for_ip, ip): ip
                 for ip in ip_to_hop
             }
-            for future in as_completed(futures, timeout=120):
+            for future in as_completed(futures, timeout=60):
                 ip = futures[future]
                 try:
                     asn = future.result()
                     if asn:
                         ip_to_hop[ip].asn = asn
                 except Exception:
-                    logger.debug("ASN lookup failed for %s", ip)
+                    pass
 
-        # Resolve missing ASN names
+        # Resolve missing names from cache
         for hop in hops:
-            if hop.asn and not hop.asn.name:
-                hop.asn.name = self._resolve_asn_name(hop.asn.number)
+            if hop.asn and not hop.asn.name and hop.asn.number in self._asn_name_cache:
+                hop.asn.name = self._asn_name_cache[hop.asn.number]
 
         return hops
 
@@ -343,16 +276,11 @@ class RouteMonitor:
                 asns.append(hop.asn)
         return ASPath(hops=asns)
 
-    def probe_route(
-        self,
-        destination: str,
-        provider_name: str = "",
-        provider_asn: int = 0,
-    ) -> RouteSnapshot:
-        """Full route probe: MTR + ASN enrichment -> RouteSnapshot."""
+    def probe_route(self, destination: str, provider_name: str = "", provider_asn: int = 0) -> RouteSnapshot:
+        """Full route probe - fast mode."""
         logger.info("Probing route to %s", destination)
 
-        # Run MTR
+        # Run MTR with fewer cycles for speed
         mtr_data = self.run_mtr_json(
             destination,
             cycles=self.settings.general.mtr_cycles,
@@ -366,28 +294,17 @@ class RouteMonitor:
             mtr_hops = report.get("hops", [])
             for h in mtr_hops:
                 if isinstance(h, dict):
-                    ip = h.get("host", {}).get("ip", "*")
-                    loss = h.get("loss", 0.0)
-                    rtt_avg = h.get("avg", 0.0)
-                    rtt_min = h.get("min", 0.0)
-                    rtt_max = h.get("max", 0.0)
-                    hop_num = h.get("count", len(hops) + 1)
-                else:
-                    continue
+                    hops.append(RouteHop(
+                        hop_number=h.get("count", len(hops) + 1),
+                        ip_address=h.get("host", {}).get("ip", "*"),
+                        rtt_avg=h.get("avg", 0.0),
+                        rtt_min=h.get("min", 0.0),
+                        rtt_max=h.get("max", 0.0),
+                        loss_percent=h.get("loss", 0.0),
+                    ))
 
-                hops.append(RouteHop(
-                    hop_number=hop_num,
-                    ip_address=ip,
-                    rtt_avg=rtt_avg,
-                    rtt_min=rtt_min,
-                    rtt_max=rtt_max,
-                    loss_percent=loss,
-                ))
-
-        # Fallback to traceroute if MTR failed
         if not hops:
-            logger.warning("MTR failed, falling back to traceroute for %s", destination)
-            hops = self.run_traceroute_asn(destination)
+            logger.warning("MTR failed for %s", destination)
 
         # Enrich with ASN data
         hops = self.enrich_hops_with_asn(hops)
@@ -402,13 +319,13 @@ class RouteMonitor:
         elif any(h.loss_percent > 50 for h in hops):
             status = RouteStatus.DEGRADED
 
-        # Auto-detect provider from first non-private ASN if not specified
+        # Auto-detect provider from first ASN
         if not provider_name and as_path.hops:
-            first_public_asn = as_path.hops[0]
-            provider_name = first_public_asn.name or f"AS{first_public_asn.number}"
-            provider_asn = first_public_asn.number
+            first = as_path.hops[0]
+            provider_name = first.name or f"AS{first.number}"
+            provider_asn = first.number
 
-        snapshot = RouteSnapshot(
+        return RouteSnapshot(
             provider_name=provider_name,
             provider_asn=provider_asn,
             gateway="",
@@ -418,23 +335,30 @@ class RouteMonitor:
             status=status,
         )
 
-        logger.info(
-            "Route to %s: %s (%d hops, %d ASNs)",
-            destination, str(as_path), len(hops), len(as_path.hops),
-        )
-
-        return snapshot
-
     def probe_all_providers(self) -> list[RouteSnapshot]:
-        """Probe all configured destinations from local PC."""
+        """Probe all destinations in parallel for speed."""
         snapshots: list[RouteSnapshot] = []
 
-        for dest_config in self.settings.destinations:
-            snapshot = self.probe_route(
-                destination=dest_config.destination,
-                provider_name=dest_config.expected_provider or "",
-                provider_asn=dest_config.expected_asn or 0,
-            )
-            snapshots.append(snapshot)
+        with ThreadPoolExecutor(max_workers=len(self.settings.destinations) or 1) as executor:
+            futures = {
+                executor.submit(
+                    self.probe_route,
+                    destination=dest_cfg.destination,
+                    provider_name=dest_cfg.expected_provider or "",
+                    provider_asn=dest_cfg.expected_asn or 0,
+                ): dest_cfg.destination
+                for dest_cfg in self.settings.destinations
+            }
+            for future in as_completed(futures, timeout=300):
+                try:
+                    snapshot = future.result()
+                    snapshots.append(snapshot)
+                except Exception as e:
+                    dest = futures[future]
+                    logger.error("Probe failed for %s: %s", dest, e)
+
+        # Sort by destination order from config
+        dest_order = {d.destination: i for i, d in enumerate(self.settings.destinations)}
+        snapshots.sort(key=lambda s: dest_order.get(s.destination, 999))
 
         return snapshots

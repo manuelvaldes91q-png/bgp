@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from config.settings import Settings
-from modules.route_monitor import RouteMonitor, detect_public_ip, lookup_bgp_routes
+from modules.route_monitor import RouteMonitor, detect_public_ip, lookup_bgp_routes, is_international_hop
 from modules.route_analyzer import RouteAnalyzer
 from modules.performance import PerformanceCollector
 from modules.web_server import run_web_server, update_state
@@ -19,6 +19,15 @@ PROJECT_ROOT = Path(__file__).parent
 LOG_DIR = PROJECT_ROOT / "logs"
 
 logger = logging.getLogger("ewinet")
+
+# ANSI color codes for terminal output
+C_RESET = "\033[0m"
+C_GREEN = "\033[92m"
+C_YELLOW = "\033[93m"
+C_RED = "\033[91m"
+C_CYAN = "\033[96m"
+C_DIM = "\033[2m"
+C_BOLD = "\033[1m"
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -244,23 +253,32 @@ class EwinetMonitor:
             # Show AS path
             if snapshot.as_path.hops:
                 unique_asns = snapshot.as_path.unique_asns()
-                as_path_str = " -> ".join(
-                    f"AS{asn.number}" + (f" ({asn.name})" if asn.name else "")
-                    for asn in unique_asns
-                )
-                print(f"  AS Path: {as_path_str}")
+                # Color AS path: green for international transit
+                as_path_parts = []
+                for asn in unique_asns:
+                    label = f"AS{asn.number}"
+                    if asn.name:
+                        label += f" ({asn.name})"
+                    if is_international_hop(asn.number):
+                        as_path_parts.append(f"{C_GREEN}{label}{C_RESET}")
+                    else:
+                        as_path_parts.append(label)
+                print(f"  AS Path: {' -> '.join(as_path_parts)}")
 
                 # Show BGP info for each ASN in path
                 print(f"  BGP Routing:")
                 for asn in unique_asns:
                     prefixes = lookup_bgp_routes(asn.number)
                     name_str = f" ({asn.name})" if asn.name else ""
+                    intl = is_international_hop(asn.number)
+                    color = C_GREEN if intl else ""
+                    reset = C_RESET if intl else ""
                     if prefixes:
-                        print(f"    AS{asn.number}{name_str}: {len(prefixes)} prefixes")
-                        for p in prefixes[:5]:
-                            print(f"      - {p}")
-                        if len(prefixes) > 5:
-                            print(f"      ... ({len(prefixes) - 5} mas)")
+                        print(f"    {color}AS{asn.number}{name_str}: {len(prefixes)} prefixes{reset}")
+                        for p in prefixes[:3]:
+                            print(f"      {color}- {p}{reset}")
+                        if len(prefixes) > 3:
+                            print(f"      {color}... ({len(prefixes) - 3} mas){reset}")
                     else:
                         print(f"    AS{asn.number}{name_str}: sin datos BGP")
 
@@ -284,15 +302,25 @@ class EwinetMonitor:
             # Show key hops
             print(f"  Hops:")
             for hop in snapshot.hops[:10]:
-                asn_str = f"AS{hop.asn.number}" if hop.asn else "?"
+                asn_num = hop.asn.number if hop.asn else 0
+                asn_str = f"AS{asn_num}" if hop.asn else "?"
                 name_str = f" ({hop.asn.name})" if hop.asn and hop.asn.name else ""
                 loss_str = f" {hop.loss_percent:.0f}% loss" if hop.loss_percent > 0 else ""
+
+                # Color: green for international, default for local
+                if asn_num and is_international_hop(asn_num):
+                    color, reset = C_GREEN, C_RESET
+                elif hop.ip_address == "*":
+                    color, reset = C_DIM, C_RESET
+                else:
+                    color, reset = "", ""
+
                 print(
-                    f"    #{hop.hop_number:2d} "
+                    f"    {color}#{hop.hop_number:2d} "
                     f"{hop.ip_address:18s} "
                     f"{asn_str}{name_str}"
                     f"  {hop.rtt_avg:7.1f}ms"
-                    f"{loss_str}"
+                    f"{loss_str}{reset}"
                 )
 
             if len(snapshot.hops) > 10:

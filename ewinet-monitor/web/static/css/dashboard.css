@@ -472,6 +472,8 @@ body {
 
 .asn-node.local { border-color: var(--accent-blue); background: var(--accent-blue-dim); }
 .asn-node.transit { border-color: var(--accent-purple); background: var(--accent-purple-dim); }
+.asn-node.transit.intl { border-color: var(--accent-green); background: var(--accent-green-dim); }
+.asn-node.transit.intl .asn-number { color: var(--accent-green); }
 .asn-node.destination { border-color: var(--accent-green); background: var(--accent-green-dim); }
 .asn-node.unexpected {
     border-color: var(--accent-red);
@@ -557,6 +559,9 @@ body {
 }
 
 .hops-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.hops-table tr.hop-intl td { color: var(--accent-green); }
+.hops-table tr.hop-intl td:first-child { border-left: 2px solid var(--accent-green); }
 
 .loss-low { color: var(--accent-green); }
 .loss-medium { color: var(--accent-yellow); }

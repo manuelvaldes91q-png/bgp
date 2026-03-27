@@ -190,8 +190,10 @@ function renderProviders(snapshots, anomalies, providers) {
             asns.forEach((asn, i) => {
                 if (i > 0) html += '<span class="asn-arrow">→</span>';
                 const isUnexpected = unexpected.has(asn.number);
-                const type = i === 0 ? 'local' : i === asns.length - 1 ? 'destination' : 'transit';
-                const cls = isUnexpected ? 'unexpected' : type;
+                const isIntl = i > 0 && i < asns.length - 1 && isInternationalASN(asn.number);
+                let type = i === 0 ? 'local' : i === asns.length - 1 ? 'destination' : 'transit';
+                let cls = isUnexpected ? 'unexpected' : type;
+                if (isIntl) cls += ' intl';
                 html += `<div class="asn-node ${cls}">
                     <span class="asn-number">AS${asn.number}</span>
                     <span class="asn-name">${esc(asn.name || '--')}</span>
@@ -213,7 +215,9 @@ function renderProviders(snapshots, anomalies, providers) {
                         </tr></thead><tbody>`;
                 ps.hops.forEach(h => {
                     const lossCls = h.loss_percent === 0 ? 'loss-low' : h.loss_percent < 20 ? 'loss-medium' : 'loss-high';
-                    html += `<tr>
+                    const asnNum = h.asn ? h.asn.number : 0;
+                    const rowCls = asnNum && isInternationalASN(asnNum) ? 'hop-intl' : '';
+                    html += `<tr class="${rowCls}">
                         <td>${h.hop_number}</td>
                         <td>${esc(h.ip_address)}</td>
                         <td>${h.asn ? 'AS' + h.asn.number : '--'}</td>
@@ -445,7 +449,6 @@ function toggleHops(id, el) {
 
 function parseASPath(pathStr) {
     if (!pathStr) return [];
-    // Format: "AS10929 (Inter) -> AS3356 (Level3/Lumen) -> AS15169 (Google)"
     const parts = pathStr.split('->').map(s => s.trim());
     return parts.map(p => {
         const match = p.match(/AS(\d+)(?:\s*\(([^)]+)\))?/i);
@@ -454,6 +457,18 @@ function parseASPath(pathStr) {
         }
         return { number: 0, name: p };
     });
+}
+
+// Known Venezuelan ASNs
+const VZ_ASNS = new Set([10929, 15135, 263220, 269693, 264628, 271910, 263702, 271886, 267798, 271949, 27984, 273087, 272058, 264681, 272800, 266793]);
+
+// Known international transit ASNs
+const INTL_ASNS = new Set([3356, 1299, 174, 6453, 3257, 2914, 6939, 1273, 9002, 3491, 5511, 6762, 7018, 3320, 15169, 13335, 20940, 8075, 16509, 32934, 20473, 14061, 54113, 7922, 396982, 16265, 24940]);
+
+function isInternationalASN(asn) {
+    if (VZ_ASNS.has(asn)) return false;
+    if (INTL_ASNS.has(asn)) return true;
+    return false;
 }
 
 function formatDuration(seconds) {
